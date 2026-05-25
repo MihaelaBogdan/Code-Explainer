@@ -1,0 +1,8 @@
+streamlit
+faiss-cpu
+transformers
+torch
+google-generativeai
+openai
+networkx
+matplotlib
