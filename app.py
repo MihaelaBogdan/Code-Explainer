@@ -5,6 +5,8 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import streamlit as st
 import streamlit.components.v1 as components
 import shutil
+import torch
+torch.classes.__path__ = [] 
 import pickle
 import numpy as np
 from pathlib import Path
@@ -323,7 +325,7 @@ if not st.session_state.project_processed:
         st.markdown("""
         <div class="glass-card" style="text-align: center; height: 180px;">
             <h3>Căutare Semantică FAISS</h3>
-            <p>Interogare instantanee în cod pe bază de concepte, nu doar cuvinte cheie rigide, folosind indexarea similarității L2.</p>
+            <p>Interogare instantanee în cod pe bază de concepte, nu doar cuvinte cheie rigide, folosind indexarea similarității cosine.</p>
         </div>
         """, unsafe_allow_html=True)
     with col3:
@@ -521,7 +523,7 @@ else:
                         <div class="glass-card" style="margin-bottom: 20px;">
                             <h4 style="margin: 0; color: #38bdf8; display: flex; justify-content: space-between;">
                                 <span>[{idx+1}] Fișier: {chunk['file_path']}</span>
-                                <span style="font-size: 0.8em; color: #8b5cf6;">Relevanță Scenariu (L2 dist): {chunk['score']:.4f}</span>
+                                <span style="font-size: 0.8em; color: #8b5cf6;">Similaritate Scenariu (Cosine): {chunk['score']:.4f}</span>
                             </h4>
                             <div style="margin: 10px 0;">
                                 <span class="custom-badge custom-badge-green"><b>Tip fragment:</b> {chunk_type_label}</span>

@@ -150,10 +150,13 @@ class CodeBERTIndexer:
         all_embeddings = np.vstack(embeddings).astype('float32')
         
         # Dimensiunea modelului CodeBERT este de 768 dimensiuni
+        faiss.normalize_L2(all_embeddings)
+
         dimension = all_embeddings.shape[1]
         
-        # Creăm indexul FAISS L2 (L2 distance)
-        self.index = faiss.IndexFlatL2(dimension)
+        # Creăm indexul FAISS bazat pe similaritate cosinus
+        #self.index = faiss.IndexFlatL2(dimension)
+        self.index = faiss.IndexFlatIP(dimension)
         self.index.add(all_embeddings)
 
     def save_index(self, save_dir):
@@ -198,15 +201,16 @@ class CodeBERTIndexer:
             
         # Generăm embedding-ul pentru întrebare
         query_vector = self.get_embeddings([query]).astype('float32')
+        faiss.normalize_L2(query_vector)
         
         # Căutăm în FAISS
-        distances, indices = self.index.search(query_vector, top_k)
+        similarities, indices = self.index.search(query_vector, top_k)
         
         results = []
         for i, idx in enumerate(indices[0]):
             if idx != -1 and idx < len(self.chunks):
                 chunk = self.chunks[idx].copy()
-                chunk["score"] = float(distances[0][i])
+                chunk["score"] = float(similarities[0][i])
                 results.append(chunk)
                 
         return results
