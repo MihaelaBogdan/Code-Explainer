@@ -19,6 +19,7 @@ from code_parser import (
     generate_dependency_diagram
 )
 from vector_store import CodeBERTIndexer, DEVICE
+from security_analyzer import analyze_python_file
 
 # Configurare pagină Streamlit
 st.set_page_config(
@@ -67,6 +68,8 @@ if "search_tokens" not in st.session_state:
     st.session_state.search_tokens = None
 if "search_query_cached" not in st.session_state:
     st.session_state.search_query_cached = ""
+if "security_findings" not in st.session_state:
+    st.session_state.security_findings = []
 
 def clean_workspace():
     """Curăță fișierele anterioare și stările salvate."""
@@ -242,6 +245,18 @@ if uploaded_file is not None and not st.session_state.project_processed:
     # Scanare fișiere proiect
     all_files = scan_project_files(TEMP_DIR)
     
+    security_findings = []
+
+    for file in all_files:
+
+        if file.suffix.lower() == ".py":
+
+            findings = analyze_python_file(file, TEMP_DIR)
+
+            security_findings.extend(findings)
+
+    st.session_state.security_findings = security_findings
+    
     if not all_files:
         st.error("Nu s-au găsit fișiere de cod acceptate în arhivă!")
     else:
@@ -336,10 +351,11 @@ if not st.session_state.project_processed:
         </div>
         """, unsafe_allow_html=True)
 else:
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "Dashboard & Explorator Cod", 
         "Arhitectură UML & Relații", 
-        "Căutare Semantică în Proiect"
+        "Căutare Semantică în Proiect",
+        "Analiză de Securitate"
     ])
     
     # ----------------- TAB 1: DASHBOARD & CODE VIEW -----------------
@@ -621,4 +637,50 @@ else:
                         st.error(f"Nu s-a putut genera harta de atenție: {str(e)}")
             else:
                 st.info("Apăsați butonul 'Generează Harta de Atenție' de mai sus pentru a vizualiza rețeaua.")
+    # ----------------- TAB 4: ANALIZĂ DE SECURITATE -----------------
+    with tab4:
 
+        st.markdown("## Security Audit (AST Static Analysis)")
+
+        findings = st.session_state.security_findings
+
+        if not findings:
+
+            st.success("Nu au fost detectate vulnerabilități.")
+
+        else:
+
+            st.warning(f"Au fost detectate {len(findings)} probleme potențiale.")
+
+            for finding in findings:
+
+                severity = finding["severity"]
+
+                color = {
+                    "LOW": "#38bdf8",
+                    "MEDIUM": "#facc15",
+                    "HIGH": "#ef4444"
+                }.get(severity, "#94a3b8")
+
+                html_security = (
+                    f'<div style="'
+                    f'border:1px solid {color};'
+                    f'border-left:6px solid {color};'
+                    f'padding:15px;'
+                    f'border-radius:10px;'
+                    f'margin-bottom:15px;'
+                    f'background:rgba(255,255,255,0.03);'
+                    f'">'
+
+                    f'<h4>{finding["type"]}</h4>'
+
+                    f'<p><b>Severity:</b> {severity}</p>'
+                    f'<p><b>File:</b> {finding["file"]}</p>'
+                    f'<p><b>Line:</b> {finding["line"]}</p>'
+                    f'<p><b>Description:</b> {finding["description"]}</p>'
+
+                    f'<pre>{finding["code"]}</pre>'
+
+                    f'</div>'
+                    )
+                st.markdown(html_security, unsafe_allow_html=True)
