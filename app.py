@@ -251,7 +251,7 @@ if uploaded_file is not None and not st.session_state.project_processed:
 
         if file.suffix.lower() == ".py":
 
-            findings = analyze_python_file(file, TEMP_DIR)
+            findings = analyze_python_file(file, TEMP_DIR, indexer=st.session_state.indexer)
 
             security_findings.extend(findings)
 
@@ -682,5 +682,8 @@ else:
                     f'<pre>{finding["code"]}</pre>'
 
                     f'</div>'
+
+                    f'<p><b>AI Semantic Match:</b> {finding["semantic_match"]}</p>'
+                    f'<p><b>AI Confidence:</b> {finding["semantic_score"]}</p>'
                     )
                 st.markdown(html_security, unsafe_allow_html=True)

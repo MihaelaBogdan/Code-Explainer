@@ -1,12 +1,52 @@
 import ast
 from pathlib import Path
+import numpy as np
+
+SECURITY_PATTERNS = {
+    "Command Injection": [
+        "os.system(user_input)",
+        "subprocess.run(cmd, shell=True)"
+    ],
+
+    "SQL Injection": [
+        "cursor.execute('SELECT * FROM users WHERE id=' + user_input)",
+        "query = f'SELECT * FROM users WHERE name={name}'"
+    ],
+
+    "Unsafe Deserialization": [
+        "pickle.loads(data)",
+        "yaml.load(data)"
+    ],
+
+    "Weak Cryptography": [
+        "hashlib.md5(password.encode())",
+        "hashlib.sha1(data)"
+    ]
+}
 
 
 class SecurityVisitor(ast.NodeVisitor):
 
-    def __init__(self, source_lines):
+    def __init__(self, source_lines,indexer=None):
         self.findings = []
         self.source_lines = source_lines
+
+        self.indexer = indexer
+        self.semantic_vectors = {}
+
+        if self.indexer:
+
+            for vuln_type, examples in SECURITY_PATTERNS.items():
+
+                emb = self.indexer.get_embeddings(examples)
+
+                mean_vec = np.mean(emb, axis=0).astype("float32")
+
+                mean_vec /= np.linalg.norm(mean_vec)
+
+                self.semantic_vectors[vuln_type] = mean_vec
+
+
 
     def add_finding(self, vuln_type, severity, node, description):
 
@@ -17,13 +57,43 @@ class SecurityVisitor(ast.NodeVisitor):
         if 0 < line <= len(self.source_lines):
             code_line = self.source_lines[line - 1].strip()
 
+        semantic_type, semantic_score = self.semantic_similarity(code_line)
+
         self.findings.append({
             "type": vuln_type,
             "severity": severity,
             "line": line,
             "code": code_line,
-            "description": description
+            "description": description,
+            "semantic_match": semantic_type,
+            "semantic_score": round(semantic_score, 4),
         })
+
+    def semantic_similarity(self, code_line):
+
+        if not self.indexer:
+            return None, 0.0
+
+        try:
+
+            emb = self.indexer.get_embeddings([code_line])[0]
+            emb = emb / np.linalg.norm(emb)
+
+            best_type = None
+            best_score = 0.0
+
+            for vuln_type, vec in self.semantic_vectors.items():
+
+                similarity = float(np.dot(emb, vec))
+
+                if similarity > best_score:
+                    best_score = similarity
+                    best_type = vuln_type
+
+            return best_type, best_score
+
+        except:
+            return None, 0.0
 
     # =========================
     # FUNCTION CALL ANALYSIS
@@ -177,7 +247,7 @@ class SecurityVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def analyze_python_file(file_path, root_dir):
+def analyze_python_file(file_path, root_dir, indexer=None):
 
     path = Path(file_path)
 
@@ -196,7 +266,7 @@ def analyze_python_file(file_path, root_dir):
     except SyntaxError:
         return []
 
-    visitor = SecurityVisitor(content.splitlines())
+    visitor = SecurityVisitor(content.splitlines(), indexer=indexer)
 
     visitor.visit(tree)
 
