@@ -91,12 +91,12 @@ def clean_workspace():
 
 def render_mermaid(mermaid_code, height=500):
     """
-    Randează un diagramă Mermaid.js într-un element iframe securizat și personalizat,
-    cu suport complet pentru zoom interactiv (wheel), pan (drag) și butoane de control.
+    Randează un diagramă Mermaid.js într-un iframe Streamlit,
+    cu zoom + pan custom (fără svg-pan-zoom, stabil și fără erori SVGMatrix).
     """
-    # Escapăm caractere care ar putea sparge stringul javascript
+
     escaped_code = mermaid_code.replace("`", "\\`").replace("${", "\\${")
-    
+
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -111,84 +111,168 @@ def render_mermaid(mermaid_code, height=500):
             height: 100%;
             overflow: hidden;
           }}
+
           #diagram-container {{
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-          }}
+          width: 100%;
+          height: 100%;
+          display: block;
+          overflow: visible;
+}}
+
           svg {{
             width: 100% !important;
             height: 100% !important;
+            max-width: none;
+            transform-origin: center;
+            user-select: none;
           }}
         </style>
-        <!-- Încărcăm biblioteca oficială svg-pan-zoom pentru pan & zoom interactiv -->
-        <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
-      </head>
-      <body>
-        <div id="diagram-container">
-          <div id="loading" style="color: #94a3b8; font-family: sans-serif; text-align: center; margin-top: 20%;">Se randează diagrama...</div>
-        </div>
-        
-        <!-- Script ascuns în care punem definiția Mermaid -->
-        <script id="mermaid-data" type="text/plain">{escaped_code}</script>
-        
+
         <script type="module">
           import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-          
+
           mermaid.initialize({{
             startOnLoad: false,
-            theme: 'dark',
-            securityLevel: 'loose',
-            themeVariables: {{
-              background: '#0d1117',
-              primaryColor: '#8b5cf6',
-              primaryTextColor: '#c9d1d9',
-              lineColor: '#38bdf8',
-              secondaryColor: '#1e293b'
-            }}
+            theme: 'base',
+            securityLevel: 'loose'
           }});
-          
+
           async function initDiagram() {{
             try {{
               const container = document.getElementById('diagram-container');
               const code = document.getElementById('mermaid-data').textContent;
+
+              console.log("MERMAID CODE:");
+              console.log(code);
+
+              const result = await mermaid.render('mermaid-svg', code);
+
+              console.log("MERMAID RESULT:");
+              console.log(result);
+
+              container.innerHTML = result.svg;
+
+              ;
+
+              const svg = container.querySelector('svg');
               
-              // Randăm manual codul Mermaid în SVG
-              const {{ svg }} = await mermaid.render('mermaid-svg', code);
-              container.innerHTML = svg;
-              
-              const svgElement = container.querySelector('svg');
-              svgElement.setAttribute('id', 'rendered-svg');
-              svgElement.style.width = '100%';
-              svgElement.style.height = '100%';
-              
-              // Atașăm motorul de pan & zoom
-              svgPanZoom('#rendered-svg', {{
-                zoomEnabled: true,
-                controlIconsEnabled: true,
-                fit: true,
-                center: true,
-                minZoom: 0.1,
-                maxZoom: 10,
-                zoomScaleFactor: 0.15
+              await new Promise(requestAnimationFrame);
+              await new Promise(requestAnimationFrame);
+              requestAnimationFrame(() => {{
+                  requestAnimationFrame(() => {{
+                
+                    const realSvg = container.querySelector("svg");
+
+                    const bbox = realSvg.getBBox();
+                    console.log("REAL bbox:", bbox);
+
+                    if (!bbox.width || !bbox.height) {{
+                      console.warn("Still not ready, retrying...");
+                      setTimeout(initDiagram, 50);
+                      return;
+                    }}
+
+                    realSvg.setAttribute(
+                      "viewBox",
+                      `${{bbox.x - 10}} ${{ bbox.y - 10 }} ${{ bbox.width + 20 }} $${{ bbox.height + 20 }}`
+                    );
+
+                  }});
               }});
+              
+              console.log("SVG INJECTED");
+              console.log("SVG ELEMENT:");
+              console.log(svg);
+
+              if (!svg) {{
+                throw new Error("SVG-ul Mermaid nu a fost generat.");
+              }}
+
+              // styling stabil
+              svg.style.width = '100%';
+              svg.style.height = '100%';
+              svg.style.maxWidth = 'none';
+              svg.style.transformOrigin = 'center';
+
+              let scale = 1;
+              let panX = 0;
+              let panY = 0;
+
+              let dragging = false;
+              let startX = 0;
+              let startY = 0;
+
+              function applyTransform() {{
+                svg.style.transform =
+                  `translate(${{panX}}px, ${{panY}}px) scale(${{scale}})`;
+              }}
+
+              // 🔥 ZOOM
+              container.addEventListener('wheel', (e) => {{
+                e.preventDefault();
+
+                const zoomStep = 0.1;
+                const direction = e.deltaY > 0 ? -1 : 1;
+
+                scale = Math.min(10, Math.max(0.2, scale + direction * zoomStep));
+
+                applyTransform();
+              }}, {{ passive: false }});
+
+              // 🔥 PAN START
+              container.addEventListener('mousedown', (e) => {{
+                dragging = true;
+                startX = e.clientX - panX;
+                startY = e.clientY - panY;
+                container.style.cursor = 'grabbing';
+              }});
+
+              container.addEventListener('mousemove', (e) => {{
+                if (!dragging) return;
+
+                panX = e.clientX - startX;
+                panY = e.clientY - startY;
+
+                applyTransform();
+              }});
+
+              container.addEventListener('mouseup', () => {{
+                dragging = false;
+                container.style.cursor = 'grab';
+              }});
+
+              container.addEventListener('mouseleave', () => {{
+                dragging = false;
+                container.style.cursor = 'grab';
+              }});
+
             }} catch (error) {{
               console.error(error);
-              document.getElementById('diagram-container').innerHTML = 
-                `<div style="color: #ef4444; font-family: sans-serif; padding: 20px;">
-                  Eroare randare diagramă: Moștenirea sau conexiunea conține elemente neacceptate în sintaxă.
-                 </div>`;
+              console.error("MERMAID ERROR:", error);
+
+              document.getElementById('diagram-container').innerHTML =
+                `<div style="color:#ef4444;font-family:sans-serif;padding:20px;">
+                  Eroare randare diagramă: ${{{{error}}}}
+                </div>`;
             }}
           }}
-          
-          // Pornim randarea după ce pagina s-a încărcat
+
           window.addEventListener('load', initDiagram);
         </script>
+      </head>
+
+      <body>
+        <div id="diagram-container">
+          <div style="color:#94a3b8;font-family:sans-serif;margin-top:20%;">
+            Se randează diagrama...
+          </div>
+        </div>
+
+        <script id="mermaid-data" type="text/plain">{escaped_code}</script>
       </body>
     </html>
     """
+
     components.html(html_code, height=height, scrolling=False)
 
 # ----------------- SIDEBAR -----------------
