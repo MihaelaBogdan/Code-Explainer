@@ -33,9 +33,10 @@ class CodeBERTIndexer:
         if self.model is None:
             # Descarcă/încarcă modelul specificat de la Hugging Face
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModel.from_pretrained(self.model_name)
+            self.model = AutoModel.from_pretrained(self.model_name, attn_implementation="eager")
             self.model.to(DEVICE)
             self.model.eval() # Punem modelul în modul de evaluare (fără dropout)
+            print('-----------------------' + str(self.model.config) + '-----------------------') #Afoisăm configurația modelului pentru debug
 
     def tokenize(self, text):
         """
@@ -63,15 +64,25 @@ class CodeBERTIndexer:
         
         with torch.no_grad():
             # Rulăm modelul solicitând matricea de atenție
-            outputs = self.model(**inputs, output_attentions=True)
+            outputs = self.model(**inputs, output_attentions=True, return_dict=True)
             
             # Verificăm dacă atenția este disponibilă în output (pentru unele configurări)
+            #if hasattr(outputs, 'attentions') and outputs.attentions is not None and len(outputs.attentions) > 0:
             if hasattr(outputs, 'attentions') and outputs.attentions is not None:
                 # outputs.attentions este un tuplu de 12 tensori de formă (batch_size, num_heads, seq_len, seq_len)
                 # Extragem ultimul strat al Transformerului și primul element din batch
                 last_layer_attention = outputs.attentions[-1][0]
                 # Calculăm media ponderată pe toate cele 12 capete de atenție
                 avg_attention = torch.mean(last_layer_attention, dim=0)
+                print("-----------------TOKENS:-------------------")
+                print(tokens)
+
+                print("------------ATTENTION SHAPE:---------------")
+                print(avg_attention.shape)
+
+                print("------------ATTENTION MATRIX:---------------")
+                print(avg_attention.cpu().numpy())
+
                 return tokens, avg_attention.cpu().numpy()
             else:
                 # Fallback în caz că nu e disponibilă

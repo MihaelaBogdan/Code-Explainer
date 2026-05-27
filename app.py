@@ -20,6 +20,7 @@ from code_parser import (
 )
 from vector_store import CodeBERTIndexer, DEVICE
 from security_analyzer import analyze_python_file
+import traceback
 
 # Configurare pagină Streamlit
 st.set_page_config(
@@ -590,8 +591,22 @@ else:
                     try:
                         indexer = st.session_state.indexer
                         att_tokens, att_matrix = indexer.get_attention_matrix(code_input)
+                        att_matrix = np.array(att_matrix)
+
+                        st.write("Attention shape:", att_matrix.shape)
+
+                        if len(att_matrix.shape) == 4:
+                            att_matrix = att_matrix[-1][0]
+
+                        elif len(att_matrix.shape) == 3:
+                            att_matrix = att_matrix[0]
+
+                        if len(att_matrix.shape) != 2:
+                            st.error(f"Format attention invalid: {att_matrix.shape}")
+                            st.stop()
                         
                         import matplotlib.pyplot as plt
+                        
                         
                         # Curățăm tokenii pentru o afișare mai lizibilă în grafic
                         display_tokens = [t.replace('Ġ', ' ').replace('Ċ', ' \\n') for t in att_tokens]
@@ -633,8 +648,11 @@ else:
                         * Culorile luminoase (galben, portocaliu) indică o atenție puternică, în timp ce culorile închise (albastru, violet) reprezintă o corelație redusă.
                         * Acest comportament demonstrează capacitatea nativă a arhitecturii **Transformer** de a asocia contextul global fără a fi limitată de distanța dintre tokeni, spre deosebire de rețelele RNN sau LSTM.
                         """)
+                    
                     except Exception as e:
                         st.error(f"Nu s-a putut genera harta de atenție: {str(e)}")
+                        st.error("Detalii eroare:")
+                        st.text(traceback.format_exc())
             else:
                 st.info("Apăsați butonul 'Generează Harta de Atenție' de mai sus pentru a vizualiza rețeaua.")
     # ----------------- TAB 4: ANALIZĂ DE SECURITATE -----------------
