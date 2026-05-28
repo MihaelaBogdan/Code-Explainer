@@ -4092,7 +4092,13 @@ else:
                             outputs = indexer.model(**inputs, output_attentions=True)
 
                         # outputs.attentions: tuple de 12 tensori (1, 12, seq, seq)
-                        last_layer = outputs.attentions[-1][0].cpu().numpy()  # (12, seq, seq)
+                        if hasattr(outputs, 'attentions') and outputs.attentions is not None and len(outputs.attentions) > 0:
+                            last_layer = outputs.attentions[-1][0].cpu().numpy()  # (12, seq, seq)
+                        else:
+                            # Fallback elegant cu matrice identitate / uniformă
+                            last_layer = np.zeros((12, len(tokens_raw), len(tokens_raw)))
+                            for h in range(12):
+                                last_layer[h] = np.eye(len(tokens_raw))
 
                         if head_mode == "Media tuturor capetelor":
                             att_matrix = last_layer.mean(axis=0)
@@ -4843,7 +4849,13 @@ def {n2}({args2 or 'data'}):
                                     with torch.no_grad():
                                         outputs = indexer.model(**inputs, output_attentions=True)
                                     
-                                    last_layer = outputs.attentions[-1][0].cpu().numpy()  # (12, seq, seq)
+                                    if hasattr(outputs, 'attentions') and outputs.attentions is not None and len(outputs.attentions) > 0:
+                                        last_layer = outputs.attentions[-1][0].cpu().numpy()  # (12, seq, seq)
+                                    else:
+                                        # Fallback elegant cu matrice identitate / uniformă
+                                        last_layer = np.zeros((12, len(tokens_raw), len(tokens_raw)))
+                                        for h in range(12):
+                                            last_layer[h] = np.eye(len(tokens_raw))
                                     att_matrix = last_layer.mean(axis=0)  # Media tuturor celor 12 capete
                                     
                                     def clean_token(t):
