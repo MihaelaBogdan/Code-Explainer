@@ -123,6 +123,109 @@ class CodeBERTIndexer:
                 
         return np.vstack(all_embeddings)
 
+    def _tokenize_text(self, text):
+        import re
+        return re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', text.lower())
+
+    def build_lexical_index(self):
+        """
+        Construiește un index TF-IDF local și simplu pentru căutare lexicală rapidă,
+        fără dependențe externe (zero dependency).
+        """
+        import math
+        self.tf_idf_vectors = []
+        self.idf = {}
+        
+        if not self.chunks:
+            return
+            
+        num_documents = len(self.chunks)
+        document_frequencies = {}
+        
+        # 1. Calculăm Frecvența Documentelor (DF)
+        for idx, chunk in enumerate(self.chunks):
+            content = chunk.get("content", "")
+            # Combinăm cu numele elementului pentru a da greutate sporită numelui
+            title_text = f"{chunk.get('name', '')} " * 5
+            full_text = title_text + content
+            tokens = set(self._tokenize_text(full_text))
+            
+            for token in tokens:
+                document_frequencies[token] = document_frequencies.get(token, 0) + 1
+                
+        # 2. Calculăm IDF pentru fiecare cuvânt
+        for token, df in document_frequencies.items():
+            self.idf[token] = math.log((1 + num_documents) / (1 + df)) + 1
+            
+        # 3. Calculăm vectorii TF-IDF pentru fiecare document
+        for chunk in self.chunks:
+            content = chunk.get("content", "")
+            title_text = f"{chunk.get('name', '')} " * 5
+            full_text = title_text + content
+            tokens = self._tokenize_text(full_text)
+            
+            # Frecvența Termenilor (TF)
+            tf = {}
+            for token in tokens:
+                tf[token] = tf.get(token, 0) + 1
+                
+            # Vector TF-IDF
+            tf_idf = {}
+            for token, freq in tf.items():
+                tf_norm = 1 + math.log(freq)
+                tf_idf[token] = tf_norm * self.idf[token]
+                
+            # Calculăm norma L2 a vectorului pentru normalizare ulterioară
+            l2_norm = math.sqrt(sum(val ** 2 for val in tf_idf.values())) + 1e-9
+            normalized_tf_idf = {token: val / l2_norm for token, val in tf_idf.items()}
+            
+            self.tf_idf_vectors.append(normalized_tf_idf)
+
+    def get_lexical_scores(self, query):
+        """
+        Calculează scorurile de similaritate lexicală (dot product de vectori TF-IDF)
+        pentru toate chunk-urile în raport cu query-ul.
+        """
+        import math
+        scores = np.zeros(len(self.chunks))
+        if not self.chunks or not hasattr(self, 'tf_idf_vectors') or not self.tf_idf_vectors:
+            return scores
+            
+        query_tokens = self._tokenize_text(query)
+        if not query_tokens:
+            return scores
+            
+        # Construim vectorul TF-IDF pentru query
+        query_tf = {}
+        for token in query_tokens:
+            query_tf[token] = query_tf.get(token, 0) + 1
+            
+        query_tf_idf = {}
+        for token, freq in query_tf.items():
+            if token in self.idf:
+                tf_norm = 1 + math.log(freq)
+                query_tf_idf[token] = tf_norm * self.idf[token]
+                
+        # Normalizare L2 a vectorului query
+        q_norm = math.sqrt(sum(val ** 2 for val in query_tf_idf.values())) + 1e-9
+        normalized_query_tf_idf = {token: val / q_norm for token, val in query_tf_idf.items()}
+        
+        # Calculăm produsul scalar (dot product) cu fiecare document
+        for idx, doc_vector in enumerate(self.tf_idf_vectors):
+            dot_product = 0.0
+            for token, q_val in normalized_query_tf_idf.items():
+                if token in doc_vector:
+                    dot_product += q_val * doc_vector[token]
+                    
+            # Boost suplimentar substanțial dacă numele chunk-ului (funcție/clasă) este conținut direct în query
+            chunk_name = self.chunks[idx].get("name", "").lower()
+            if chunk_name and chunk_name in query.lower():
+                dot_product += 0.8 # Boost puternic pentru exact matches de nume!
+                
+            scores[idx] = dot_product
+            
+        return scores
+
     def build_index(self, chunks, progress_bar_callback=None):
         """
         Primește o listă de chunk-uri, le generează embeddings și le adaugă în FAISS.
@@ -155,6 +258,9 @@ class CodeBERTIndexer:
         # Creăm indexul FAISS L2 (L2 distance)
         self.index = faiss.IndexFlatL2(dimension)
         self.index.add(all_embeddings)
+        
+        # Construim indexul lexical local
+        self.build_lexical_index()
 
     def save_index(self, save_dir):
         """
@@ -183,30 +289,53 @@ class CodeBERTIndexer:
             self.index = faiss.read_index(str(faiss_file))
             with open(chunks_file, "rb") as f:
                 self.chunks = pickle.load(f)
+            # Reconstruim indexul lexical la încărcare
+            self.build_lexical_index()
             return True
         return False
 
     def search(self, query, top_k=4):
         """
-        Efectuează o căutare semantică: 
-        1. Tokenizează query-ul și obține vectorul prin CodeBERT
-        2. Caută în indexul FAISS top_k cele mai apropiate bucăți de cod
-        3. Returnează rezultatele cu metadate
+        Efectuează o căutare hibridă (Lexicală TF-IDF + Semantică CodeBERT):
+        1. Căutare semantică în indexul FAISS
+        2. Căutare lexicală cu vectori TF-IDF localizați
+        3. Combinare prin scor hibrid ponderat (50% semantic, 50% lexical)
         """
         if self.index is None or not self.chunks:
             return []
             
-        # Generăm embedding-ul pentru întrebare
+        # 1. Căutare Semantică (FAISS)
         query_vector = self.get_embeddings([query]).astype('float32')
+        # Căutăm în FAISS pe toate documentele disponibile ca să le combinăm
+        distances, indices = self.index.search(query_vector, len(self.chunks))
         
-        # Căutăm în FAISS
-        distances, indices = self.index.search(query_vector, top_k)
-        
-        results = []
+        semantic_scores = np.zeros(len(self.chunks))
         for i, idx in enumerate(indices[0]):
             if idx != -1 and idx < len(self.chunks):
-                chunk = self.chunks[idx].copy()
-                chunk["score"] = float(distances[0][i])
-                results.append(chunk)
+                d = distances[0][i]
+                # Convertim distanța L2 în scor de similaritate (0 la 1)
+                semantic_scores[idx] = 1.0 / (1.0 + d)
                 
-        return results
+        # 2. Căutare Lexicală (TF-IDF)
+        if not hasattr(self, 'tf_idf_vectors') or not self.tf_idf_vectors:
+            self.build_lexical_index()
+            
+        lexical_scores = self.get_lexical_scores(query)
+        
+        # 3. Combinare Ponderată Hibridă
+        hybrid_results = []
+        for idx in range(len(self.chunks)):
+            s_sem = semantic_scores[idx]
+            s_lex = lexical_scores[idx]
+            # Combinăm cu ponderi egale
+            hybrid_score = 0.5 * s_sem + 0.5 * s_lex
+            
+            chunk = self.chunks[idx].copy()
+            chunk["score"] = float(hybrid_score)
+            chunk["semantic_score"] = float(s_sem)
+            chunk["lexical_score"] = float(s_lex)
+            hybrid_results.append(chunk)
+            
+        # Sortăm descrescător după scorul hibrid final
+        hybrid_results.sort(key=lambda x: x["score"], reverse=True)
+        return hybrid_results[:top_k]

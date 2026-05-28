@@ -2067,6 +2067,230 @@ async function fileOperations() {
 }
 
 
+def generate_follow_up_questions(question, answer, kb_match=None):
+    """
+    Generează dinamic 3 întrebări de follow-up relevante bazate pe contextul întrebării/răspunsului.
+    """
+    q = question.lower()
+    
+    # 1. Baza de cunoștințe
+    if kb_match:
+        follow_ups = {
+            "ast": [
+                "Cum pot vizualiza arborele AST în tabul dedicat?",
+                "Care este diferența dintre un NodeVisitor și un NodeTransformer?",
+                "Cum detectează AST variabilele nefolosite?"
+            ],
+            "attention": [
+                "Cum influențează capetele multiple (Multi-Head) auto-atenția?",
+                "Cum pot interpreta intensitatea din Heatmap-ul de atenție?",
+                "Ce rol are vectorul Query (Q) în formulă?"
+            ],
+            "streamlit_state": [
+                "Cum folosesc st.session_state pentru a stoca date din formulare?",
+                "Când ar trebui să apelez st.rerun() explicit?",
+                "Cum pot curăța memoria cache din Streamlit?"
+            ],
+            "database_normalization": [
+                "Ce este forma normală Boyce-Codd (BCNF)?",
+                "Cum sparg un tabel în 3NF fără pierdere de date?",
+                "Ce este o cheie primară compusă?"
+            ],
+            "acid": [
+                "Ce înseamnă Dirty Read și cum se evită în tranzacții?",
+                "Cum diferă Isolation Level-ul într-o bază de date?",
+                "Cum previne Rollback-ul pierderea de date?"
+            ],
+            "sql_injection": [
+                "Cum folosesc SQLAlchemy pentru prepared statements?",
+                "Cum curăț inputurile primite în câmpurile de text?",
+                "Ce este un blind SQL injection?"
+            ],
+            "java_oop": [
+                "Care este diferența dintre o interfață și o clasă abstractă în Java?",
+                "Cum funcționează supraîncărcarea (overloading) vs suprascrierea (overriding)?",
+                "Ce este modificatorul de acces 'protected'?"
+            ],
+            "js_async": [
+                "Ce este un Promise.all() și cum optimizează apelurile?",
+                "Cum funcționează microtask queue în Event Loop?",
+                "Care este diferența dintre Promise și Callback?"
+            ],
+            "cpp_memory": [
+                "Care este diferența dintre unique_ptr și shared_ptr?",
+                "Ce este un memory leak și cum îl pot depista?",
+                "Cum funcționează destructorul virtual în C++?"
+            ],
+            "rust_safety": [
+                "Ce sunt Lifetimes în Rust și când sunt necesare?",
+                "Cum funcționează conceptconceptul de mutabilitate în Rust?",
+                "Ce este tipul special Option<T>?"
+            ],
+            "go_concurrency": [
+                "Ce este un buffered channel în Go?",
+                "Cum folosesc sync.WaitGroup pentru sincronizare?",
+                "Ce se întâmplă în caz de Deadlock într-un canal?"
+            ],
+            "csharp_dotnet": [
+                "Cum funcționează delegatul Func<> și Action<> în C#?",
+                "Care este diferența dintre IQueryable și IEnumerable în LINQ?",
+                "Ce este Garbage Collection-ul în CLR?"
+            ],
+            "web_layout": [
+                "Când ar trebui să folosesc CSS Grid în loc de Flexbox?",
+                "Cum fac un grid responsiv cu repeat(auto-fit, minmax)?",
+                "Ce proprietăți Flexbox aliniază elementele pe axa transversală?"
+            ],
+            "recursion": [
+                "Care este diferența de performanță dintre recursivitate și iterare?",
+                "Cum previn eroarea de Stack Overflow în Python?",
+                "Cum implementez căutarea binară recursiv?"
+            ],
+            "oop_principles": [
+                "Ce înseamnă compoziția în loc de moștenire (Composition over Inheritance)?",
+                "Ce este polimorfismul la compilare?",
+                "Cum se aplică abstractizarea în design-ul bazelor de date?"
+            ],
+            "stack_ds": [
+                "Cum pot implementa o stivă folosind o listă înlănțuită?",
+                "Care este complexitatea timp O(1) pentru push și pop?",
+                "Cum folosește compilatorul stiva în recursivitate?"
+            ],
+            "queue_ds": [
+                "Care este diferența dintre coada simplă și o coadă de priorități?",
+                "Cum funcționează o coadă circulară (Circular Queue)?",
+                "Cum folosesc deque din Python pentru cozi?"
+            ],
+            "tree_ds": [
+                "Cum se face parcurgerea în inordine (In-order traversal) a unui BST?",
+                "Ce este un arbore AVL și cum se auto-echilibrează?",
+                "Care este diferența dintre BFS și DFS pentru arbori?"
+            ],
+            "graph_ds": [
+                "Cum funcționează algoritmul lui Dijkstra pentru drumul minim?",
+                "Care sunt diferențele dintre matricea și lista de adiacență?",
+                "Cum detectez ciclurile într-un graf?"
+            ],
+            "solid_principles": [
+                "Ce este Liskov Substitution Principle (LSP)?",
+                "Cum aplic Dependency Inversion în proiectul meu?",
+                "Ce înseamnă Interface Segregation?"
+            ],
+            "singleton_pattern": [
+                "De ce este Singleton considerat uneori un anti-pattern?",
+                "Cum creez un Singleton thread-safe în Python?",
+                "Cum folosesc Singleton pentru conexiunea la baza de date?"
+            ],
+            "git_vcs": [
+                "Cum rezolv conflictele de îmbinare (merge conflicts) în Git?",
+                "Care este diferența dintre git merge și git rebase?",
+                "Cum anulez ultimul commit local fără a pierde modificările?"
+            ],
+            "json_format": [
+                "Cum convertesc o stuctură de date Python în JSON?",
+                "Care este diferența dintre JSON și XML?",
+                "Cum parsez JSON asincron în JavaScript?"
+            ],
+            "rest_api": [
+                "Ce este un RESTful API stateless?",
+                "Care este rolul token-urilor JWT în securizarea API-ului?",
+                "Ce înseamnă codul de răspuns HTTP 429?"
+            ],
+            "sql_nosql": [
+                "Când este recomandat să folosesc MongoDB în loc de PostgreSQL?",
+                "Ce înseamnă consistența eventuală (Eventual Consistency) în NoSQL?",
+                "Cum funcționează scalabilitatea orizontală?"
+            ],
+            "db_indexing": [
+                "De ce scrierea devine mai lentă când adăugăm indecși?",
+                "Ce este un index compus pe mai multe coloane?",
+                "Cum pot vedea dacă interogarea mea folosește un index (EXPLAIN)?"
+            ],
+            "complexity_big_o": [
+                "De ce este $O(N \\log N)$ mai bun decât $O(N^2)$?",
+                "Cum calculez complexitatea spațiu a unui algoritm?",
+                "Ce complexitate are căutarea binară?"
+            ],
+            "recursion_iteration": [
+                "Cum se face optimizarea apelului pe coadă (Tail Call Optimization)?",
+                "Care este complexitatea memoriei în recursivitatea pe stivă?",
+                "Când ar trebui să prefer buclele standard?"
+            ]
+        }
+        if kb_match in follow_ups:
+            return follow_ups[kb_match]
+            
+    # 2. Întrebări legate de fișiere specifice
+    for f in ["app.py", "code_parser.py", "vector_store.py", "security_analyzer.py"]:
+        if f in q:
+            if "app.py" in f:
+                return [
+                    "Ce componente UI Streamlit se regăsesc în app.py?",
+                    "Cum se gestionează stările session_state în app.py?",
+                    "Ce biblioteci se folosesc pentru stilizarea interfeței?"
+                ]
+            elif "code_parser.py" in f:
+                return [
+                    "Cum extrage code_parser.py clasele și funcțiile prin AST?",
+                    "Ce structură are codul pentru generarea diagramelor Mermaid?",
+                    "Cum sunt filtrate fișierele de cod acceptate?"
+                ]
+            elif "vector_store.py" in f:
+                return [
+                    "Cum funcționează indexul FAISS pentru stocarea embeddings?",
+                    "Cum funcționează căutarea hibridă (lexicală + semantică)?",
+                    "Cum se vectorisează batch-urile de cod pe Apple Silicon (MPS)?"
+                ]
+            elif "security_analyzer.py" in f:
+                return [
+                    "Ce reguli de securitate scanează security_analyzer.py?",
+                    "Cum detectează similaritatea CodeBERT secretele hardcodate?",
+                    "Cum se pot integra reguli de securitate personalizate?"
+                ]
+                
+    # 3. Întrebări legate de importuri/statistici
+    if any(w in q for w in ["import", "depend", "pachet", "librar"]):
+        return [
+            "Ce librării externe folosește modulul vector_store.py?",
+            "Cum adaug o bibliotecă nouă în requirements.txt?",
+            "De ce importăm ast în mod explicit?"
+        ]
+        
+    if any(w in q for w in ["statist", "sumar", "cate", "câte", "linii"]):
+        return [
+            "Care este cel mai mare fișier din proiect și de ce?",
+            "Câte funcții din codebase sunt documentate cu docstrings?",
+            "Cum influențează dimensiunea codului performanța vectorizării?"
+        ]
+
+    # 4. Fallback general bazat pe termeni detectați
+    if any(w in q for w in ["variabil", "declar", "atribu"]):
+        return [
+            "Cum declar variabile în JavaScript vs Java?",
+            "Ce este tipizarea dinamică în Python?",
+            "Ce este scope-ul unei variabile (local vs global)?"
+        ]
+    if any(w in q for w in ["functi", "funcți", "metod"]):
+        return [
+            "Cum definesc o funcție recursivă?",
+            "Ce sunt argumentele implicite (default arguments)?",
+            "Cum returnez mai multe valori dintr-o funcție Python?"
+        ]
+    if any(w in q for w in ["clas", "obiect", "construct"]):
+        return [
+            "Ce rol are constructorul __init__ în Python?",
+            "Ce este clasa de bază Object în Java?",
+            "Cum implementez moștenirea multiplă în Python?"
+        ]
+        
+    # Fallback implicit universal
+    return [
+        "Care sunt principiile SOLID de design software?",
+        "Cum funcționează recursivitatea în programare?",
+        "Ce diferențe sunt între bazele de date SQL și NoSQL?"
+    ]
+
+
 def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
     """Răspuns complet bazat pe KB pre-calculat + FAISS + AST + clasificare semantică prin CodeBERT."""
     import re as _re
@@ -2135,7 +2359,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
 
 """
             answer_text = analysis_box + answer_text
-            return answer_text, []
+            return answer_text, [], None
 
     # ── detecție intenție prin modelul Transformer (CodeBERT) ────────────────
     intent_detected = None
@@ -2296,7 +2520,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
 </div>
 
 """
-                return analysis_box + answer_text, []
+                return analysis_box + answer_text, [], None
             
             # 2. Verificare prin modelul Transformer cu Normalizare de Abatere Medie (dacă nu s-a găsit prin keywords)
             if not kb_match:
@@ -2355,7 +2579,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
 
 """
                 answer_text = analysis_box + answer_text
-                return answer_text, []
+                return answer_text, [], kb_match
         except Exception as e:
             pass
 
@@ -2432,7 +2656,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
 """
             answer_text = analysis_box + answer_text
             
-        return answer_text, cks[:3]
+        return answer_text, cks[:3], None
 
     # ── STATISTICI / OVERVIEW ────────────────────────────────────────────────
     if is_stats:
@@ -2454,7 +2678,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
         for f in list(by_file.keys())[:10]:
             n = len([c for c in by_file[f] if c.get("type") in ("function","class")])
             lines.append(f"- `{f}` — {n} funcții/clase")
-        return "\n".join(lines), []
+        return "\n".join(lines), [], None
 
     # ── LISTARE FIȘIERE ───────────────────────────────────────────────────────
     if is_file:
@@ -2466,7 +2690,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
             if classes: parts.append("clase: " + ", ".join(f"`{n}`" for n in classes))
             if funcs:   parts.append("funcții: " + ", ".join(f"`{n}`" for n in funcs[:6]) + ("..." if len(funcs)>6 else ""))
             lines.append(f"- `{f}` — " + "; ".join(parts) if parts else f"- `{f}`")
-        return "\n".join(lines), []
+        return "\n".join(lines), [], None
 
     # ── LISTARE FUNCȚII / CLASE ───────────────────────────────────────────────
     if is_list:
@@ -2489,7 +2713,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
                 gf.setdefault(c.get("file_path","?"), []).append(c)
             for fp, items in gf.items():
                 lines.append(f"- `{fp}`: " + ", ".join(f"`{c['name']}`" for c in items[:10]) + ("..." if len(items)>10 else ""))
-        return "\n".join(lines), []
+        return "\n".join(lines), [], None
 
     # ── IMPORTURI PROIECT ─────────────────────────────────────────────────────
     if is_deps:
@@ -2500,9 +2724,9 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
             ai = analyze_chunk_ast(chunk.get("content", ""))
             imps = sorted(list(set(ai["imports"])))
             if imps:
-                return f"Elementul `{subject}` din fișierul `{chunk.get('file_path')}` folosește următoarele importuri direct:\n" + ", ".join(f"`{i}`" for i in imps), []
+                return f"Elementul `{subject}` din fișierul `{chunk.get('file_path')}` folosește următoarele importuri direct:\n" + ", ".join(f"`{i}`" for i in imps), [], None
             else:
-                return f"Elementul `{subject}` din fișierul `{chunk.get('file_path')}` nu conține importuri directe în corpul său.", []
+                return f"Elementul `{subject}` din fișierul `{chunk.get('file_path')}` nu conține importuri directe în corpul său.", [], None
         else:
             # Altfel, afișăm toate importurile din toate fișierele proiectului
             lines = ["**Importuri detectate per fișier în întregul proiect:**\n"]
@@ -2512,7 +2736,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
                     lines.append(f"- `{f}`: " + ", ".join(f"`{i}`" for i in uniq[:12]))
                 else:
                     lines.append(f"- `{f}`: *fără importuri detectate*")
-            return "\n".join(lines), []
+            return "\n".join(lines), [], None
 
     # ── GĂSIM CHUNK-UL SUBIECT ────────────────────────────────────────────────
     # 1. Căutare exactă în KB by_name
@@ -2537,9 +2761,9 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
                 lines = [f"**`{subject}`** nu este o funcție/clasă definită, dar apare în **{len(usages)} locuri** în proiect:\n"]
                 for fname, fpath, usage_line in usages[:12]:
                     lines.append(f"- `{fname}` (`{fpath}`): `{usage_line.strip()[:90]}`")
-                return "\n".join(lines), []
+                return "\n".join(lines), [], None
             else:
-                return f"Nu am găsit nicio referință la `{subject}` în proiect. Verifică numele exact.", []
+                return f"Nu am găsit nicio referință la `{subject}` în proiect. Verifică numele exact.", [], None
         if all_chunks and (is_explain or is_how or is_where or subject):
             chunk = all_chunks[0]
         else:
@@ -2559,7 +2783,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
             lines.append("- Întreabă-mă cum funcționează variabilele, funcțiile, clasele, buclele sau listele în **Python, Java, C++, JavaScript, Rust, Go sau C#** (ex: *\"cum declar o variabilă în java\"*, *\"cum fac un loop în C++\"*).")
             
             answer_text = "\n".join(lines)
-            return answer_text, []
+            return answer_text, [], None
 
     # Dacă chunk-ul găsit e module_level (globals), preferăm usage analysis
     if chunk.get("type") == "module_level" and subject:
@@ -2571,7 +2795,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
             lines = [f"**`{subject}`** apare în **{len(usages)} locuri** în proiect:\n"]
             for fname, fpath, usage_line in usages[:12]:
                 lines.append(f"- `{fname}` (`{fpath}`): `{usage_line.strip()[:90]}`")
-            return "\n".join(lines), []
+            return "\n".join(lines), [], None
 
     # ── CONSTRUIM RĂSPUNSUL ───────────────────────────────────────────────────
     name    = chunk.get("name","?")
@@ -2737,7 +2961,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
 """
         answer_text = analysis_box + answer_text
 
-    return answer_text, [chunk] + faiss_others[:2]
+    return answer_text, [chunk] + faiss_others[:2], None
 
 
 def render_mermaid(mermaid_code, height=500):
@@ -3925,12 +4149,21 @@ def {n2}({args2 or 'data'}):
         if not st.session_state.project_processed:
             st.info("Încarcă un proiect mai întâi din sidebar pentru a putea folosi chatbot-ul.")
         else:
+            # Tratam întrebarea venită de la butoanele rapide
+            if "query_trigger" not in st.session_state:
+                st.session_state.query_trigger = None
+
+            programmatic_q = None
+            if st.session_state.query_trigger:
+                programmatic_q = st.session_state.query_trigger
+                st.session_state.query_trigger = None # Clear it immediately
+
             # Inițializare istoric chat
             if "chat_history" not in st.session_state:
                 st.session_state.chat_history = []
 
             # Afișare mesaje anterioare
-            for msg in st.session_state.chat_history:
+            for idx, msg in enumerate(st.session_state.chat_history):
                 with st.chat_message(msg["role"], avatar="🧑‍💻" if msg["role"] == "user" else "🤖"):
                     st.markdown(msg["content"], unsafe_allow_html=True)
                     if msg.get("chunks"):
@@ -3938,15 +4171,35 @@ def {n2}({args2 or 'data'}):
                             for c in msg["chunks"]:
                                 st.markdown(f"**{c.get('name','?')}** — `{c.get('file_path','?')}` (liniile {c.get('start_line',0)}–{c.get('end_line',0)})")
                                 st.code(c["content"][:400], language="python")
+                    
+                    # Dacă acesta este ultimul mesaj și este de la asistent, adăugăm butoanele de follow-up dinamic
+                    is_last = (idx == len(st.session_state.chat_history) - 1)
+                    if is_last and msg["role"] == "assistant":
+                        user_question = ""
+                        if idx > 0 and st.session_state.chat_history[idx - 1]["role"] == "user":
+                            user_question = st.session_state.chat_history[idx - 1]["content"]
+                        
+                        kb_match = msg.get("kb_match")
+                        follow_ups = generate_follow_up_questions(user_question, msg["content"], kb_match)
+                        
+                        st.markdown("<div style='margin-top:15px; color:#38bdf8; font-weight:600; font-size:0.9em;'>⚡ Întrebări recomandate:</div>", unsafe_allow_html=True)
+                        cols = st.columns(len(follow_ups))
+                        for col_idx, f_q in enumerate(follow_ups):
+                            with cols[col_idx]:
+                                if st.button(f_q, key=f"fup_{idx}_{col_idx}", use_container_width=True):
+                                    st.session_state.query_trigger = f_q
+                                    st.rerun()
 
             # Input utilizator
             user_q = st.chat_input("Întreabă ceva despre codul tău, ex: Ce face funcția X? Unde se inițializează Y?")
 
-            if user_q:
+            active_q = programmatic_q or user_q
+
+            if active_q:
                 # Afișăm mesajul utilizatorului
                 with st.chat_message("user", avatar="🧑‍💻"):
-                    st.markdown(user_q)
-                st.session_state.chat_history.append({"role": "user", "content": user_q})
+                    st.markdown(active_q)
+                st.session_state.chat_history.append({"role": "user", "content": active_q})
 
                 with st.chat_message("assistant", avatar="🤖"):
                     with st.spinner("CodeBERT caută și analizează codul..."):
@@ -3959,8 +4212,8 @@ def {n2}({args2 or 'data'}):
                                 st.session_state.project_kb = build_project_knowledge(all_chunks)
 
                             kb = st.session_state.project_kb
-                            results = indexer.search(user_q, top_k=5)
-                            answer, found_chunks = build_chatbot_answer(user_q, results, all_chunks, kb=kb, indexer=indexer)
+                            results = indexer.search(active_q, top_k=5)
+                            answer, found_chunks, kb_match = build_chatbot_answer(active_q, results, all_chunks, kb=kb, indexer=indexer)
 
                             st.markdown(answer, unsafe_allow_html=True)
 
@@ -3971,7 +4224,7 @@ def {n2}({args2 or 'data'}):
                                     import plotly.graph_objects as go
                                     indexer.load_model()
                                     import torch
-                                    inputs = indexer.tokenizer(user_q, return_tensors="pt", truncation=True, max_length=25)
+                                    inputs = indexer.tokenizer(active_q, return_tensors="pt", truncation=True, max_length=25)
                                     tokens_raw = indexer.tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
                                     inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
                                     with torch.no_grad():
@@ -4041,8 +4294,10 @@ def {n2}({args2 or 'data'}):
                             st.session_state.chat_history.append({
                                 "role": "assistant",
                                 "content": answer,
-                                "chunks": found_chunks[:3] if found_chunks else []
+                                "chunks": found_chunks[:3] if found_chunks else [],
+                                "kb_match": kb_match
                             })
+                            st.rerun()
 
                         except Exception as e:
                             err_msg = f"Eroare: {str(e)}"
