@@ -294,12 +294,12 @@ class CodeBERTIndexer:
             return True
         return False
 
-    def search(self, query, top_k=4):
+    def search(self, query, top_k=4, semantic_weight=0.5):
         """
         Efectuează o căutare hibridă (Lexicală TF-IDF + Semantică CodeBERT):
         1. Căutare semantică în indexul FAISS
         2. Căutare lexicală cu vectori TF-IDF localizați
-        3. Combinare prin scor hibrid ponderat (50% semantic, 50% lexical)
+        3. Combinare prin scor hibrid ponderat (prin semantic_weight)
         """
         if self.index is None or not self.chunks:
             return []
@@ -327,8 +327,8 @@ class CodeBERTIndexer:
         for idx in range(len(self.chunks)):
             s_sem = semantic_scores[idx]
             s_lex = lexical_scores[idx]
-            # Combinăm cu ponderi egale
-            hybrid_score = 0.5 * s_sem + 0.5 * s_lex
+            # Combinăm cu ponderea dorită
+            hybrid_score = semantic_weight * s_sem + (1.0 - semantic_weight) * s_lex
             
             chunk = self.chunks[idx].copy()
             chunk["score"] = float(hybrid_score)

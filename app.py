@@ -3001,9 +3001,52 @@ else:
         
         # --- SUB-TAB 3.1: CĂUTARE SEMANTICĂ ---
         with sub_tab_search:
-            st.markdown("## Căutare Semantică Locală (CodeBERT + FAISS)")
+            st.markdown("## Căutare Semantică Locală Premium (CodeBERT + FAISS)")
             st.markdown("Introduceți un concept de programare, o sarcină sau un nume de funcție pe care doriți să îl găsiți (ex: *'criptează parola'*, *'socket connection'*, *'multi-threading'*, *'trimite e-mail'*). Modelul **CodeBERT** va analiza contextul semantic din spate și va localiza codul potrivit.")
             st.write("---")
+            
+            # Inițializare parametri cache search
+            if "search_weight_cached" not in st.session_state:
+                st.session_state.search_weight_cached = 0.5
+            if "search_top_k_cached" not in st.session_state:
+                st.session_state.search_top_k_cached = 5
+            if "search_min_score_cached" not in st.session_state:
+                st.session_state.search_min_score_cached = 30
+            if "search_types_cached" not in st.session_state:
+                st.session_state.search_types_cached = ["Funcție", "Clasă", "Modul"]
+                
+            # Panou de Configurare Hibridă
+            with st.expander("🛠️ Panou de Control Căutare (Parametri Hibrid & Filtrare)", expanded=False):
+                col_slider1, col_slider2 = st.columns(2)
+                with col_slider1:
+                    sem_weight = st.slider(
+                        "Echilibru Ponderi: 🌐 Semantice (CodeBERT) vs 🔑 Lexicale (TF-IDF)",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=st.session_state.search_weight_cached,
+                        step=0.05,
+                        help="0.0 înseamnă căutare pur lexicală exactă (tip grep), 1.0 înseamnă căutare pur conceptuală prin embeddings."
+                    )
+                    top_k_val = st.slider(
+                        "Număr maxim de fragmente returnate (Top K):",
+                        min_value=1,
+                        max_value=15,
+                        value=st.session_state.search_top_k_cached,
+                        step=1
+                    )
+                with col_slider2:
+                    min_score_val = st.slider(
+                        "Prag minim de relevanță (Scurgerea rezultatelor slabe %):",
+                        min_value=0,
+                        max_value=100,
+                        value=st.session_state.search_min_score_cached,
+                        step=5
+                    )
+                    selected_types = st.multiselect(
+                        "Tipuri de fragmente admise:",
+                        ["Funcție", "Clasă", "Modul"],
+                        default=st.session_state.search_types_cached
+                    )
             
             # Folosim un formular Streamlit (st.form) pentru a preveni re-rularea modelului Transformer la fiecare interacțiune
             with st.form("search_form"):
@@ -3012,27 +3055,55 @@ else:
                     value=st.session_state.search_query_cached,
                     placeholder="ex: conexiune socket, thread-ul clientului, salvare baza de date..."
                 )
-                submitted = st.form_submit_button("Caută în codebase")
+                submitted = st.form_submit_button("Caută în codebase", use_container_width=True)
                 
             if submitted and query_input:
                 with st.spinner("Modelul Transformer vectorizează textul și caută în FAISS..."):
                     try:
                         indexer = st.session_state.indexer
                         tokens, ids = indexer.tokenize(query_input)
-                        results = indexer.search(query_input, top_k=4)
+                        
+                        # Rulăm căutarea hibridă personalizată folosind ponderea utilizatorului!
+                        # Preluăm un spectru mai larg (25 elemente) pentru a le putea filtra local după criterii
+                        results = indexer.search(query_input, top_k=25, semantic_weight=sem_weight)
                         
                         # Salvare în cache-ul session_state
                         st.session_state.search_query_cached = query_input
                         st.session_state.search_results = results
                         st.session_state.search_tokens = (tokens, ids)
+                        st.session_state.search_weight_cached = sem_weight
+                        st.session_state.search_top_k_cached = top_k_val
+                        st.session_state.search_min_score_cached = min_score_val
+                        st.session_state.search_types_cached = selected_types
                     except Exception as e:
                         st.error(f"Eroare la rularea interogării CodeBERT: {str(e)}")
                         
-            # Afișăm rezultatele stocate în cache (astfel încât expander-ele să funcționeze instantaneu fără re-calculare)
+            # Afișăm rezultatele stocate în cache
             if st.session_state.search_results is not None:
-                # 1. Vizualizator Tokeni (Transformer Tokenization Inspector)
+                # 1. Filtrare locală pe baza preferințelor din UI
+                raw_results = st.session_state.search_results
+                filtered_results = []
+                
+                cached_min_score = st.session_state.get("search_min_score_cached", 30)
+                cached_types = st.session_state.get("search_types_cached", ["Funcție", "Clasă", "Modul"])
+                cached_top_k = st.session_state.get("search_top_k_cached", 5)
+                
+                type_map = {"function": "Funcție", "class": "Clasă", "module_level": "Modul"}
+                
+                for r in raw_results:
+                    conf = int(r["score"] * 100)
+                    if conf < cached_min_score:
+                        continue
+                    c_type = type_map.get(r["type"], "Modul")
+                    if c_type not in cached_types:
+                        continue
+                    filtered_results.append(r)
+                    
+                filtered_results = filtered_results[:cached_top_k]
+                
+                # 2. Vizualizator Tokeni (Transformer Tokenization Inspector)
                 tokens, ids = st.session_state.search_tokens
-                with st.expander("Tokenization Inspector (Cum descompune Transformer-ul căutarea ta):", expanded=True):
+                with st.expander("Tokenization Inspector (Cum descompune Transformer-ul căutarea ta):", expanded=False):
                     st.markdown("**Segmentare cuvinte în tokeni sub-word și asocieri de Vocabular:**")
                     
                     tokens_html = ""
@@ -3048,26 +3119,151 @@ else:
                     st.markdown(f'<div style="background: rgba(15, 23, 42, 0.5); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">{tokens_html}</div>', unsafe_allow_html=True)
                     st.write(f"*Total tokeni generați: {len(tokens)} (max 512 context).*")
                 
-                # 2. Afișare rezultate FAISS
-                results = st.session_state.search_results
-                if not results:
-                    st.warning("Nu s-au găsit fragmente relevante în baza de date vectorială.")
-                else:
-                    st.success(f"S-au găsit cele mai relevante {len(results)} fragmente de cod:")
+                # 3. Harta Semantică 2D Constellation Map (Plotly Neural Space Explorer)
+                if filtered_results:
+                    st.write("---")
+                    st.markdown("### 🌌 Harta Constelației Semantice (Plotly Neural Space)")
+                    st.markdown("Această diagramă plotează interogarea ta în centru `(0,0)` și ordonează fragmentele găsite pe baza **distanței semantice reale**. Cu cât un nod este mai aproape de centru, cu atât relevanța lui este mai mare!")
                     
-                    for idx, chunk in enumerate(results):
-                        chunk_type_label = chunk["type"].upper()
-                        lines_label = f"Lines {chunk['start_line']}-{chunk['end_line']}"
+                    try:
+                        import plotly.graph_objects as go
+                        import math
                         
+                        # Coordonatele centrului (Căutarea utilizatorului)
+                        x_coords = [0.0]
+                        y_coords = [0.0]
+                        hover_texts = [f"<b>Căutare utilizator:</b><br>'{st.session_state.search_query_cached}'"]
+                        marker_colors = ["#c084fc"] # Glowing purple center
+                        marker_sizes = [24]
+                        marker_symbols = ["star-diamond"]
+                        
+                        # Radial spacing
+                        num_nodes = len(filtered_results)
+                        for idx, chunk in enumerate(filtered_results):
+                            score = chunk.get("score", 0.5)
+                            distance = max(0.1, 1.0 - score)
+                            
+                            # Unghi uniform distribuit
+                            angle = (2.0 * math.pi * idx) / num_nodes if num_nodes > 0 else 0
+                            
+                            x = distance * math.cos(angle)
+                            y = distance * math.sin(angle)
+                            
+                            x_coords.append(x)
+                            y_coords.append(y)
+                            
+                            # Hover text cu detalii premium
+                            name = chunk.get("name", "modul_global")
+                            fpath = chunk.get("file_path", "?").split("/")[-1]
+                            h_text = f"""<b>[{idx+1}] {name}</b><br>
+Fișier: <code>{fpath}</code><br>
+Tip: {type_map.get(chunk['type'], 'Modul')}<br>
+Potrivire Hibridă: <b>{score:.1%}</b><br>
+• Semantică (CodeBERT): {chunk.get('semantic_score', 0.0):.1%}<br>
+• Lexicală (TF-IDF): {chunk.get('lexical_score', 0.0):.1%}"""
+                            hover_texts.append(h_text)
+                            
+                            # Culori dinamice bazate pe relevanță
+                            if score >= 0.70:
+                                color = "#ef4444" # Red (High match)
+                            elif score >= 0.40:
+                                color = "#f59e0b" # Orange (Medium match)
+                            else:
+                                color = "#10b981" # Green (Low match)
+                                
+                            marker_colors.append(color)
+                            marker_sizes.append(18)
+                            marker_symbols.append("circle")
+                            
+                        fig_map = go.Figure()
+                        
+                        # Linii radiale
+                        for i in range(1, len(x_coords)):
+                            fig_map.add_trace(go.Scatter(
+                                x=[0.0, x_coords[i]],
+                                y=[0.0, y_coords[i]],
+                                mode="lines",
+                                line=dict(color="rgba(148, 163, 184, 0.25)", width=2, dash="dash"),
+                                hoverinfo="skip",
+                                showlegend=False
+                            ))
+                            
+                        # Noduri
+                        fig_map.add_trace(go.Scatter(
+                            x=x_coords,
+                            y=y_coords,
+                            mode="markers+text",
+                            marker=dict(
+                                size=marker_sizes,
+                                color=marker_colors,
+                                symbol=marker_symbols,
+                                line=dict(color="#ffffff", width=1.5)
+                            ),
+                            hovertext=hover_texts,
+                            hoverinfo="text",
+                            text=["🔍 Căutare"] + [f"[{i}] {filtered_results[i-1].get('name','?')[:12]}" for i in range(1, len(x_coords))],
+                            textposition="bottom center",
+                            textfont=dict(color="#e2e8f0", size=10),
+                            showlegend=False
+                        ))
+                        
+                        fig_map.update_layout(
+                            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-1.2, 1.2]),
+                            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-1.2, 1.2]),
+                            paper_bgcolor="rgba(15, 23, 42, 0.4)",
+                            plot_bgcolor="rgba(15, 23, 42, 0.4)",
+                            margin=dict(l=10, r=10, t=10, b=10),
+                            height=450,
+                            width=600
+                        )
+                        
+                        col_map, col_map_empty = st.columns([4, 1])
+                        with col_map:
+                            st.plotly_chart(fig_map, use_container_width=True)
+                            
+                    except Exception as map_err:
+                        st.warning(f"Harta constelației nu s-a putut randa: {str(map_err)}")
+                
+                # 4. Afișare rezultate FAISS
+                if not filtered_results:
+                    st.warning("Nu s-au găsit fragmente care să îndeplinească criteriile tale de filtrare sau pragul de relevanță.")
+                else:
+                    st.success(f"S-au găsit cele mai relevante {len(filtered_results)} fragmente de cod conform filtrelor tale:")
+                    
+                    for idx, chunk in enumerate(filtered_results):
+                        chunk_type_label = type_map.get(chunk["type"], "Modul").upper()
+                        lines_label = f"Liniile {chunk['start_line']}-{chunk['end_line']}"
+                        score = chunk.get("score", 0.5)
+                        confidence_pct = int(score * 100)
+                        
+                        # Select confidence color bar
+                        if score >= 0.70:
+                            gauge_color = "#ef4444" # Red
+                            badge_color = "custom-badge-red"
+                        elif score >= 0.40:
+                            gauge_color = "#f59e0b" # Orange
+                            badge_color = "custom-badge-orange"
+                        else:
+                            gauge_color = "#10b981" # Green
+                            badge_color = "custom-badge-green"
+                            
                         st.markdown(f"""
-                        <div class="glass-card" style="margin-bottom: 20px;">
-                            <h4 style="margin: 0; color: #38bdf8; display: flex; justify-content: space-between;">
-                                <span>[{idx+1}] Fișier: {chunk['file_path']}</span>
-                                <span style="font-size: 0.8em; color: #8b5cf6;">Relevanță Scenariu (L2 dist): {chunk['score']:.4f}</span>
-                            </h4>
-                            <div style="margin: 10px 0;">
-                                <span class="custom-badge custom-badge-green"><b>Tip fragment:</b> {chunk_type_label}</span>
-                                <span class="custom-badge custom-badge-blue"><b>Interval linii:</b> {lines_label}</span>
+                        <div class="glass-card" style="margin-bottom: 20px; padding: 18px; border-left: 5px solid {gauge_color};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <h4 style="margin: 0; color: #38bdf8;">[{idx+1}] Fișier: <code>{chunk['file_path']}</code></h4>
+                                <span style="font-size: 0.9em; font-weight: bold; color: {gauge_color};">Potrivire: {confidence_pct}%</span>
+                            </div>
+                            
+                            <!-- Gauge indicator bar -->
+                            <div style="width: 100%; background: #1e293b; border-radius: 4px; height: 6px; margin-bottom: 12px;">
+                                <div style="width: {confidence_pct}%; background: {gauge_color}; height: 6px; border-radius: 4px;"></div>
+                            </div>
+                            
+                            <div style="margin: 10px 0; display: flex; gap: 8px;">
+                                <span class="custom-badge {badge_color}"><b>Tip:</b> {chunk_type_label}</span>
+                                <span class="custom-badge custom-badge-blue"><b>Interval:</b> {lines_label}</span>
+                                <span class="custom-badge custom-badge-purple"><b>CodeBERT:</b> {chunk.get('semantic_score', 0.0):.1%}</span>
+                                <span class="custom-badge custom-badge-purple"><b>TF-IDF:</b> {chunk.get('lexical_score', 0.0):.1%}</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
