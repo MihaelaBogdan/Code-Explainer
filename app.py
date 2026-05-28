@@ -11,6 +11,7 @@ import numpy as np
 import random
 from pathlib import Path
 import torch
+import ast
 torch.classes.__path__ = []
 
 from code_parser import (
@@ -50,6 +51,8 @@ TEMP_DIR = Path("./temp_project_workspace")
 # Inițializare stări în session_state dacă nu există
 if "project_processed" not in st.session_state:
     st.session_state.project_processed = False
+if "project_kb" not in st.session_state:
+    st.session_state.project_kb = {"by_name": {}, "called_by": {}, "by_file": {}}
 if "file_tree" not in st.session_state:
     st.session_state.file_tree = None
 if "files_list" not in st.session_state:
@@ -90,6 +93,17 @@ if "quiz_semantic_answer" not in st.session_state:
     st.session_state.quiz_semantic_answer = None
 if "quiz_semantic_scores" not in st.session_state:
     st.session_state.quiz_semantic_scores = None
+if "quiz_history" not in st.session_state:
+    st.session_state.quiz_history = []
+if "quiz_ast_score" not in st.session_state:
+    st.session_state.quiz_ast_score = 0
+if "quiz_ast_answers" not in st.session_state:
+    st.session_state.quiz_ast_answers = {}
+if "quiz_semantic_submitted" not in st.session_state:
+    st.session_state.quiz_semantic_submitted = False
+if "quiz_semantic_selected" not in st.session_state:
+    st.session_state.quiz_semantic_selected = None
+
 
 CODE_SMELLS = [
     {
@@ -245,24 +259,8 @@ def generate_real_duplicate_refactoring(c1, c2):
         refactored_code_2 = "\n".join(ref_lines2)
         
         return shared_func, refactored_code_1, refactored_code_2
-        
-    shared_args_str = ", ".join(sorted(list(set(args1 + args2))))
-    shared_func = f"def _shared_logic({shared_args_str}):\n"
-    shared_func += f"    \x22\x22\x22Logica comună extrasă din {n1} și {n2}.\x22\x22\x22\n"
-    
-    common_set = set(l.strip() for l in lines1 if l.strip() and not l.strip().startswith("#"))
-    common_lines = [l for l in lines2 if l.strip() in common_set and "def " not in l]
-    if len(common_lines) >= 2:
-        shared_func += "\n".join("    " + l.strip() for l in common_lines[:15])
-    else:
-        trimmed_body = [l for l in lines1 if "def " not in l and not l.strip().startswith('\x22\x22\x22')]
-        shared_func += "\n".join(trimmed_body[:10])
-        
-    refactored_code_1 = f"def {n1}({', '.join(args1)}):\n    return _shared_logic({', '.join(args1) if args1 else shared_args_str})"
-    refactored_code_2 = f"def {n2}({', '.join(args2)}):\n    return _shared_logic({', '.join(args2) if args2 else shared_args_str})"
-    
-    return shared_func, refactored_code_1, refactored_code_2
 
+def find_duplicates(embeddings, chunks, threshold=0.88):
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9
     normalized = (embeddings / norms).astype('float32')
     sim_matrix = np.dot(normalized, normalized.T)
@@ -271,7 +269,7 @@ def generate_real_duplicate_refactoring(c1, c2):
     for i in range(n):
         for j in range(i + 1, n):
             sim = float(sim_matrix[i, j])
-            if sim > threshold and chunks[i]["file_path"] != chunks[j]["file_path"] or \
+            if (sim > threshold and chunks[i]["file_path"] != chunks[j]["file_path"]) or \
                (sim > threshold and chunks[i].get("name") != chunks[j].get("name")):
                 pairs.append((i, j, sim))
     return sorted(pairs, key=lambda x: -x[2])[:15]
@@ -399,6 +397,7 @@ def generate_restructuring_suggestion(chunk, smell_name):
     lines_count = chunk.get("end_line", 0) - chunk.get("start_line", 0)
     arg_str = ", ".join(args)
     actual_code = chunk.get("content", "").strip()
+    
     # Trunchiem codul original la max 40 linii pentru afișare
     actual_lines = actual_code.splitlines()
     before = "\n".join(actual_lines[:40])
@@ -406,118 +405,123 @@ def generate_restructuring_suggestion(chunk, smell_name):
         before += f"\n    ... ({len(actual_lines) - 40} linii omise)"
 
     if "Prea mulți parametri" in smell_name:
-        fields = "\n".join(f"    {a}: Any" for a in args)
+        fields = "\n".join(f"    {a}: Any = None" for a in args) if args else "    param_1: Any = None"
+        first_arg = args[0] if args else "param_1"
         after = f"""\
 from dataclasses import dataclass
 from typing import Any
 
 @dataclass
-class {name.capitalize()}Config:
+class {name.capitalize()}Params:
+    \"\"\"Obiect de configurare structurat pentru parametrii funcției `{name}`.\"\"\"
 {fields}
 
-def {name}(cfg: {name.capitalize()}Config):
-    # Acces: cfg.{args[0] if args else 'param'}, cfg.{args[1] if len(args)>1 else 'param2'}, ...
-    ..."""
+def {name}(params: {name.capitalize()}Params):
+    \"\"\"Versiune refactorizată utilizând Data Class pentru a reduce cuplajul.\"\"\"
+    # Exemplu de utilizare a parametrilor structurați:
+    valor_intrinsecă = params.{first_arg}
+    # Adaugă restul logicii tale utilizând 'params.' în loc de variabile locale libere
+    return valor_intrinsecă"""
         return before, after
 
     if "lungă" in smell_name.lower() or "srp" in smell_name.lower():
         n = max(lines_count // 3, 5)
-        sub1 = f"_validate_{name}"
-        sub2 = f"_process_{name}"
-        sub3 = f"_format_{name}_result"
+        sub1 = f"_validate_{name}_inputs"
+        sub2 = f"_execute_{name}_logic"
+        sub3 = f"_format_{name}_outputs"
         after = f"""\
-def {sub1}({arg_str}):
-    \"\"\"Validează input-ul și precondițiile ({n} linii din {name}).\"\"\"
-    ...
+def {sub1}({arg_str if args else 'data'}):
+    \"\"\"Etapa 1: Validează argumentele de intrare și precondițiile.\"\"\"
+    # Logica de validare extrasă din funcția originală
+    return True
 
-def {sub2}({arg_str}):
-    \"\"\"Logica principală de procesare ({n} linii din {name}).\"\"\"
-    ...
+def {sub2}({arg_str if args else 'data'}):
+    \"\"\"Etapa 2: Procesează logica principală și calculele interne.\"\"\"
+    # Nucleul algoritmic extras din {name}
+    return {{"status": "processed", "payload": None}}
 
 def {sub3}(result):
-    \"\"\"Formatează și returnează rezultatul final ({n} linii din {name}).\"\"\"
-    ...
+    \"\"\"Etapa 3: Formatează rezultatul obținut pentru a-l face conform.\"\"\"
+    # Structurarea datelor de ieșire
+    return result
 
 def {name}({arg_str}):
-    \"\"\"Orchestrează fluxul — fiecare pas delegat unui sub-modul.\"\"\"
-    {sub1}({arg_str})
-    result = {sub2}({arg_str})
-    return {sub3}(result)"""
+    \"\"\"Funcție orchestrator cu responsabilitate unică conform principiului SRP.\"\"\"
+    {sub1}({arg_str if args else 'None'})
+    intermediate = {sub2}({arg_str if args else 'None'})
+    return {sub3}(intermediate)"""
         return before, after
 
     if "docstring" in smell_name.lower() or "documentație" in smell_name.lower():
         if chunk_type == "function":
-            args_doc = "\n".join(f"        {a}: [tip] — [descriere]" for a in args) or "        # fără parametri"
-            # Inserăm docstring-ul în codul real
+            args_doc = "\n".join(f"        {a}: Parametru primit pentru procesarea `{name}`." for a in args) or "        Niciun parametru."
             first_line = actual_lines[0] if actual_lines else f"def {name}({arg_str}):"
-            rest = "\n".join(actual_lines[1:6]) if len(actual_lines) > 1 else "    ..."
+            rest = "\n".join(actual_lines[1:5]) if len(actual_lines) > 1 else "    ..."
             after = f"""\
 {first_line}
-    \"\"\"
-    [Descrie ce face `{name}` în 1-2 propoziții.]
+    \"\"\"Procesează operațiunea `{name}` pe baza parametrilor primiți.
 
     Args:
 {args_doc}
 
     Returns:
-        [tip]: [Ce returnează și în ce condiții.]
-
-    Raises:
-        ValueError: [Când input-ul e invalid.]
+        Any: Rezultatul evaluării logice sau al calculelor din `{name}`.
     \"\"\"
 {rest}
     ..."""
         else:
-            methods_preview = "\n".join(f"        {m.split('(')[0]}(): [descriere]" for m in methods[:5])
+            methods_preview = "\n".join(f"        {m.split('(')[0]}(): Execută o metodă definită în clasa `{name}`." for m in methods[:5])
             first_line = actual_lines[0] if actual_lines else f"class {name}:"
             after = f"""\
 {first_line}
-    \"\"\"
-    [Descrie scopul clasei `{name}`.]
+    \"\"\"Clasă responsabilă cu gestiunea și încapsularea structurii `{name}`.
 
     Attributes:
-        [attr] ([tip]): [descriere]
+        state (dict): Dicționar intern ce menține starea instanței clasei `{name}`.
 
     Methods:
-{methods_preview or '        # listează metodele principale'}
+{methods_preview or '        # Găzduiește metodele specifice acestei structuri'}
     \"\"\"
     ..."""
         return before, after
 
     if "Except prea generic" in smell_name:
-        import re
-        # Găsim blocul try/except real și îl refactorizăm
+        first_line = actual_lines[0] if actual_lines else f"def {name}({arg_str}):"
         after = f"""\
 import logging
+
 logger = logging.getLogger(__name__)
 
-# Înlocuiește blocul except: sau except Exception: cu variante specifice:
-try:
-    result = {name}({arg_str})
-except ValueError as e:
-    logger.error("Input invalid în {name}: %s", e)
-    raise
-except (IOError, OSError) as e:
-    logger.error("Eroare I/O în {name}: %s", e)
-    raise
-except Exception as e:
-    logger.critical("Eroare neașteptată în {name}: %s", e, exc_info=True)
-    raise"""
+{first_line}
+    \"\"\"Implementare securizată cu tratarea excepțiilor specifice.\"\"\"
+    try:
+        # Codul tău intern care poate genera erori de date sau I/O
+        # Evită să prinzi Exception general dacă nu relansezi (re-raise)
+        result = True
+        return result
+    except ValueError as val_err:
+        logger.warning("Eroare de validare a datelor în `{name}`: %s", val_err)
+        raise
+    except RuntimeError as run_err:
+        logger.error("Eroare de rulare în contextul `{name}`: %s", run_err)
+        raise
+    except Exception as unexpected_err:
+        logger.critical("Eroare critică neașteptată în `{name}`: %s", unexpected_err, exc_info=True)
+        raise"""
         return before, after
 
     if "SQL" in smell_name:
+        first_arg = args[0] if args else "db_query_param"
         after = f"""\
-# Varianta 1 — parametrizare directă (cursor DB-API):
-def {name}(user_id: int):
-    cursor.execute(
-        "SELECT * FROM users WHERE id = %s",
-        (user_id,)          # argument separat — nu se interpolează în query
-    )
-    return cursor.fetchone()
+# Soluția 1 — Securizare prin query parametrizat nativ (Recomandat):
+def safe_{name}(db_cursor, {first_arg}):
+    \"\"\"Trimitere securizată a datelor prin argumente separate pentru a preveni SQL Injection.\"\"\"
+    query = "SELECT * FROM date_proiect WHERE identificator = %s"
+    db_cursor.execute(query, ({first_arg},))  # Argument sub formă de tuplu
+    return db_cursor.fetchall()
 
-# Varianta 2 — ORM SQLAlchemy (recomandat în proiecte mari):
-def {name}(user_id: int):
-    return db.session.query(User).filter(User.id == user_id).first()"""
+# Soluția 2 — Utilizarea unui ORM modern (ex: SQLAlchemy):
+# db.session.query(DateProiect).filter(DateProiect.identificator == {first_arg}).all()"""
         return before, after
 
     if "Hardcoded Secret" in smell_name or "hardcodat" in smell_name.lower():
@@ -525,64 +529,71 @@ def {name}(user_id: int):
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # citește .env din rădăcina proiectului
+# Recomandare: Încarcă secretele din fișiere de mediu (.env exclus din git)
+load_dotenv()
 
-{name} = os.getenv("{name.upper()}")
-if not {name}:
-    raise EnvironmentError(
-        "Variabila de mediu '{name.upper()}' nu este setată. "
-        "Adaug-o în fișierul .env (și adaugă .env în .gitignore!)"
-    )
+{name.upper()}_SECRET = os.getenv("{name.upper()}_KEY")
+if not {name.upper()}_SECRET:
+    # Fallback securizat sau ridicare de excepție clară în loc de valori implicite
+    raise ValueError("Cheia esențială '{name.upper()}_KEY' lipsește din variabilele de mediu.")
 
-# --- .env (NU commit în git!) ---
-# {name.upper()}=valoarea_ta_secreta"""
+# --- Configurare fișier `.env` în rădăcina proiectului: ---
+# {name.upper()}_KEY=valoarea_ta_secreta_aici_fara_ghilimele"""
         return before, after
 
     if "Command Injection" in smell_name or "Shell" in smell_name:
+        first_arg = args[0] if args else "user_input"
         after = f"""\
 import subprocess
 
-# Argumentele ca listă — shell=False implicit, fără injecție posibilă:
-result = subprocess.run(
-    ["comanda", arg1, arg2],   # niciodată string interpolat cu input extern
-    capture_output=True,
-    text=True,
-    timeout=30,
-    check=True                 # ridică CalledProcessError la exit code != 0
-)
-output = result.stdout"""
+def safe_execute_{name}({first_arg}):
+    \"\"\"Evită rularea shell=True și trimite argumentele ca listă securizată.\"\"\"
+    # Subprocess parsează lista direct către API-ul sistemului de operare,
+    # prevenind rularea de comenzi multiple adăugate malicios (Command Injection).
+    result = subprocess.run(
+        ["/usr/bin/env", "echo", {first_arg}],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=True
+    )
+    return result.stdout.strip()"""
         return before, after
 
     if "global" in smell_name.lower():
         after = f"""\
-# Varianta 1 — funcție pură (preferată, ușor de testat):
-def {name}({arg_str}, state: dict) -> dict:
-    return {{**state, "result": ...}}   # returnează stare nouă, nu modifică global
+# Soluție: Evită stările globale partajate (partajarea mutabilă cauzează side-effects)
+# Varianta 1 — Funcție pură cu stări transmise explicit:
+def {name}_pure({arg_str}{', ' if args else ''}current_state: dict) -> tuple:
+    \"\"\"Returnează un nou dicționar de stare, lăsând starea originală imutabilă.\"\"\"
+    new_state = current_state.copy()
+    new_state["updated_at"] = "now"
+    return new_state, "valoare_calculata"
 
-# Varianta 2 — clasă cu stare encapsulată:
-class {name.capitalize()}Manager:
-    def __init__(self):
-        self._state: dict = {{}}
+# Varianta 2 — Încapsularea stării într-o clasă manager:
+class {name.capitalize()}StateTracker:
+    def __init__(self, initial_state: dict):
+        self._state = initial_state.copy()
 
     def {name}(self, {arg_str}):
-        self._state["result"] = ...
-        return self._state.copy()  # returnăm copie — protejăm starea internă"""
+        self._state["updated_at"] = "now"
+        return self._state.copy()"""
         return before, after
 
     if "duplicat" in smell_name.lower():
         after = f"""\
-# Extrage logica comună într-o funcție utilitară partajată:
-def _shared_{name}_logic({arg_str}):
-    \"\"\"Logica extrasă din {name} (aplicată peste tot unde era duplicată).\"\"\"
-    ...   # codul comun din ambele copii
+# Extrage logica duplicată într-o funcție helper privată:
+def _shared_{name}_helper({arg_str}):
+    \"\"\"Logica utilitară comună extrasă din ambele funcții duplicate.\"\"\"
+    # Codul partajat merge aici
+    pass
 
-# Înlocuiești FIECARE copie cu apelul la funcția comună:
+# Înlocuiește implementările ambelor funcții duplicate cu apelul delegat:
 def {name}({arg_str}):
-    return _shared_{name}_logic({arg_str})
+    return _shared_{name}_helper({arg_str})
 
-# Dacă al doilea loc era într-o altă funcție (ex: {name}_v2):
-def {name}_v2({arg_str}):
-    return _shared_{name}_logic({arg_str})"""
+def {name}_alternative({arg_str}):
+    return _shared_{name}_helper({arg_str})"""
         return before, after
 
     return None
@@ -3463,22 +3474,126 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
     # ----------------- TAB 5: QUIZ COD & SEMANTIC -----------------
     with tab5:
         st.markdown("## Quiz Interactiv — Cod & Semantic")
-        st.markdown("Alege tipul de quiz, setează timpul și apasă **Start Quiz** pentru a lansa sesiunea în popup.")
-        st.write("---")
+        
+        # 1. Explanation of Transformer / CodeBERT connection
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, rgba(139,92,246,0.06), rgba(56,189,248,0.06)); border: 1px solid rgba(139,92,246,0.25); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
+            <h3 style="margin-top:0; color:#38bdf8; display:flex; align-items:center; gap:8px; font-size:1.15em;">
+                🧠 Cum funcționează evaluarea Transformer (CodeBERT)?
+            </h3>
+            <p style="color:#94a3b8; font-size:0.95em; line-height:1.6; margin-bottom:0;">
+                Spre deosebire de testele clasice grilă statice, <strong>Quiz-ul Semantic</strong> folosește modelul <strong>CodeBERT</strong> (o arhitectură Transformer antrenată bimodal pe cod sursă și limbaj natural). Atunci când alegi o descriere, modelul generează un vector dens (embedding) pe baza codului tău și a variantelor text. Apoi măsoară unghiul dintre acești vectori folosind <strong>similaritatea cosinus</strong>. Varianta cu scorul maxim este considerată potrivirea semantică optimă din spațiul vectorial al rețelei neurale!
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
+        # 2. Score Attempts Dashboard HUD
+        if st.session_state.get("quiz_history"):
+            history = st.session_state.quiz_history
+            total_attempts = len(history)
+            avg_score = int(sum(x["pct"] for x in history) / total_attempts)
+            best_score = max(x["pct"] for x in history)
+            
+            # Determine Rank Badge
+            if best_score == 100:
+                rank_badge = "🌌 Transformer Master"
+                badge_color = "#c084fc"
+                badge_glow = "rgba(192,132,252,0.4)"
+            elif best_score >= 71:
+                rank_badge = "⚔️ Code Architect"
+                badge_color = "#38bdf8"
+                badge_glow = "rgba(56,189,248,0.4)"
+            elif best_score >= 50:
+                rank_badge = "🛡️ Code Apprentice"
+                badge_color = "#fbbf24"
+                badge_glow = "rgba(251,191,36,0.4)"
+            else:
+                rank_badge = "🥚 Junior Intern"
+                badge_color = "#94a3b8"
+                badge_glow = "rgba(148,163,184,0.4)"
+                
+            st.markdown(f"""
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div style="background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);">
+                    <div style="color: #64748b; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Teste Rulate</div>
+                    <div style="color: #f1f5f9; font-size: 2em; font-weight: bold; margin-top: 8px;">{total_attempts}</div>
+                </div>
+                <div style="background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);">
+                    <div style="color: #64748b; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Medie Globală</div>
+                    <div style="color: #38bdf8; font-size: 2em; font-weight: bold; margin-top: 8px;">{avg_score}%</div>
+                </div>
+                <div style="background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);">
+                    <div style="color: #64748b; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Cel Mai Bun Scor</div>
+                    <div style="color: #4ade80; font-size: 2em; font-weight: bold; margin-top: 8px;">{best_score}%</div>
+                </div>
+                <div style="background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15); border-left: 4px solid {badge_color};">
+                    <div style="color: #64748b; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Rang Curent</div>
+                    <div style="color: {badge_color}; font-size: 1.15em; font-weight: bold; margin-top: 14px; text-shadow: 0 0 8px {badge_glow};">{rank_badge}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # 3. Plotly score progression line graph
+            import plotly.graph_objects as go
+            x_vals = [f"Test {i+1}" for i in range(len(history))]
+            y_vals = [attempt["pct"] for attempt in history]
+            types = [attempt["type"] for attempt in history]
+            hover_texts = [f"Tip: {t}<br>Scor: {s}%" for t, s in zip(types, y_vals)]
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                mode="lines+markers",
+                name="Scor",
+                line=dict(color="#8b5cf6", width=3),
+                marker=dict(size=8, color="#38bdf8", symbol="circle"),
+                text=hover_texts,
+                hoverinfo="text"
+            ))
+            
+            fig.update_layout(
+                title=dict(
+                    text="Evoluția Scorurilor În Timp",
+                    font=dict(color="#f1f5f9", size=15),
+                    x=0.5,
+                    xanchor="center"
+                ),
+                xaxis=dict(
+                    title="Încercare",
+                    gridcolor="rgba(255,255,255,0.05)",
+                    tickfont=dict(color="#94a3b8")
+                ),
+                yaxis=dict(
+                    title="Scor (%)",
+                    range=[-5, 105],
+                    gridcolor="rgba(255,255,255,0.05)",
+                    tickfont=dict(color="#94a3b8")
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=40, r=40, t=50, b=40),
+                height=240
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Lansează un Quiz Nou")
+        st.markdown("Alege tipul de quiz, setează timpul și apasă **Start Quiz** pentru a lansa sesiunea în popup.")
+        
         q_col1, q_col2, q_col3 = st.columns([2, 1, 1])
         with q_col1:
             quiz_type = st.radio(
                 "Tip quiz:",
                 ["Quiz din Cod (AST)", "Quiz Semantic (CodeBERT)"],
-                horizontal=True
+                horizontal=True,
+                key="quiz_type_select"
             )
         with q_col2:
-            quiz_time = st.selectbox("Timp per întrebare (sec):", [15, 30, 45, 60], index=1)
+            quiz_time = st.selectbox("Timp per întrebare (sec):", [15, 30, 45, 60], index=1, key="quiz_time_select")
         with q_col3:
             st.write("")
             st.write("")
-            launch_quiz = st.button("🚀 Start Quiz", use_container_width=True, type="primary")
+            launch_quiz = st.button("🚀 Start Quiz", use_container_width=True, type="primary", key="launch_quiz_btn")
 
         if launch_quiz:
             if quiz_type == "Quiz din Cod (AST)":
@@ -3486,7 +3601,8 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
                 st.session_state.quiz_ast_submitted = False
             else:
                 st.session_state.quiz_semantic_q = generate_semantic_question(st.session_state.chunks)
-                st.session_state.quiz_semantic_answer = None
+                st.session_state.quiz_semantic_submitted = False
+                st.session_state.quiz_semantic_selected = None
                 st.session_state.quiz_semantic_scores = None
             st.session_state["quiz_open"] = quiz_type
             st.session_state["quiz_time"] = quiz_time
@@ -3501,58 +3617,85 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
                 seconds = st.session_state.get("quiz_time", 30)
                 total_sec = seconds * len(questions)
 
-                # Timer JavaScript
-                components.html(f"""
-                <div id="timer-bar-wrap" style="margin-bottom:12px;">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                    <span style="color:#38bdf8;font-family:monospace;font-size:1.1em;font-weight:bold;">
-                      ⏱ Timp rămas: <span id="countdown">{total_sec}</span>s
-                    </span>
-                    <span style="color:#64748b;font-size:0.85em;">{len(questions)} întrebări · {seconds}s/întrebare</span>
-                  </div>
-                  <div style="background:#1e293b;border-radius:6px;height:10px;overflow:hidden;">
-                    <div id="timer-bar" style="background:linear-gradient(90deg,#8b5cf6,#38bdf8);height:10px;width:100%;border-radius:6px;transition:width 1s linear;"></div>
-                  </div>
-                </div>
-                <script>
-                  let total = {total_sec};
-                  let left = total;
-                  const cd = document.getElementById('countdown');
-                  const bar = document.getElementById('timer-bar');
-                  const iv = setInterval(() => {{
-                    left--;
-                    if (cd) cd.textContent = left;
-                    if (bar) bar.style.width = (left / total * 100) + '%';
-                    if (bar && left < total * 0.3) bar.style.background = 'linear-gradient(90deg,#ef4444,#f59e0b)';
-                    if (left <= 0) {{ clearInterval(iv); if(cd) cd.textContent = '0 — Timp expirat!'; }}
-                  }}, 1000);
-                </script>
-                """, height=80)
+                # Timer JavaScript (only runs when not submitted yet)
+                if not st.session_state.get("quiz_ast_submitted", False):
+                    components.html(f"""
+                    <div id="timer-bar-wrap" style="margin-bottom:12px;">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <span style="color:#38bdf8;font-family:monospace;font-size:1.1em;font-weight:bold;">
+                          ⏱ Timp rămas: <span id="countdown">{total_sec}</span>s
+                        </span>
+                        <span style="color:#64748b;font-size:0.85em;">{len(questions)} întrebări · {seconds}s/întrebare</span>
+                      </div>
+                      <div style="background:#1e293b;border-radius:6px;height:10px;overflow:hidden;">
+                        <div id="timer-bar" style="background:linear-gradient(90deg,#8b5cf6,#38bdf8);height:10px;width:100%;border-radius:6px;transition:width 1s linear;"></div>
+                      </div>
+                    </div>
+                    <script>
+                      let total = {total_sec};
+                      let left = total;
+                      const cd = document.getElementById('countdown');
+                      const bar = document.getElementById('timer-bar');
+                      const iv = setInterval(() => {{
+                        left--;
+                        if (cd) cd.textContent = left;
+                        if (bar) bar.style.width = (left / total * 100) + '%';
+                        if (bar && left < total * 0.3) bar.style.background = 'linear-gradient(90deg,#ef4444,#f59e0b)';
+                        if (left <= 0) {{ clearInterval(iv); if(cd) cd.textContent = '0 — Timp expirat!'; }}
+                      }}, 1000);
+                    </script>
+                    """, height=80)
 
-                user_answers = {}
-                for i, q in enumerate(questions):
-                    st.markdown(f"**Î{i+1}.** {q['question']}")
-                    with st.expander("Cod analizat", expanded=False):
-                        st.code(q["code"][:400], language="python")
-                    user_answers[i] = st.radio("", options=q["options"], key=f"dlg_ast_{i}", index=None, label_visibility="collapsed")
-                    st.divider()
+                if not st.session_state.get("quiz_ast_submitted", False):
+                    user_answers = {}
+                    for i, q in enumerate(questions):
+                        st.markdown(f"**Î{i+1}.** {q['question']}")
+                        with st.expander("Cod analizat", expanded=False):
+                            st.code(q["code"][:400], language="python")
+                        user_answers[i] = st.radio("", options=q["options"], key=f"dlg_ast_{i}", index=None, label_visibility="collapsed")
+                        st.divider()
 
-                if st.button("Verifică Răspunsurile", use_container_width=True, type="primary"):
-                    score = sum(1 for i, q in enumerate(questions) if user_answers.get(i) == q["correct"])
-                    st.write("---")
+                    if st.button("Verifică Răspunsurile", use_container_width=True, type="primary"):
+                        st.session_state.quiz_ast_submitted = True
+                        st.session_state.quiz_ast_score = sum(1 for i, q in enumerate(questions) if user_answers.get(i) == q["correct"])
+                        st.session_state.quiz_ast_answers = user_answers
+                        
+                        # Log to history
+                        if "quiz_history" not in st.session_state:
+                            st.session_state.quiz_history = []
+                        import datetime
+                        pct = int(st.session_state.quiz_ast_score / len(questions) * 100)
+                        st.session_state.quiz_history.append({
+                            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "type": "Quiz din Cod (AST)",
+                            "score": f"{st.session_state.quiz_ast_score}/{len(questions)}",
+                            "pct": pct
+                        })
+                        st.rerun()
+                else:
+                    # Show results and Close button
+                    score = st.session_state.quiz_ast_score
+                    user_answers = st.session_state.quiz_ast_answers
+                    st.write("### Rezultate Quiz AST")
                     for i, q in enumerate(questions):
                         ans = user_answers.get(i)
                         ok = ans == q["correct"]
                         color = "#4ade80" if ok else "#ef4444"
                         icon = "✅" if ok else "❌"
-                        st.markdown(f'<span style="color:{color}">{icon} Î{i+1}: {q["question"]}<br><small>{q["explanation"]}</small></span>', unsafe_allow_html=True)
+                        st.markdown(f'<div style="margin-bottom:12px;padding:8px;border-left:3px solid {color};background:rgba(255,255,255,0.01);"><span style="color:{color};font-weight:bold;">{icon} Î{i+1}: {q["question"]}</span><br><span style="color:#94a3b8;font-size:0.9em;">Răspunsul tău: {ans or "Netrecut"}<br>Corect: {q["correct"]}<br>💡 {q["explanation"]}</span></div>', unsafe_allow_html=True)
+                    
                     pct = int(score / len(questions) * 100)
                     medal = "🥇" if pct == 100 else "🥈" if pct >= 60 else "🥉"
                     st.markdown(f"""
                     <div style="text-align:center;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);border-radius:12px;padding:20px;margin-top:16px;">
                         <h2 style="color:#a78bfa;">{medal} Scor: {score}/{len(questions)} ({pct}%)</h2>
                     </div>""", unsafe_allow_html=True)
-                    st.session_state["quiz_open"] = None
+                    
+                    if st.button("Închide și Revino la Dashboard", use_container_width=True, type="primary"):
+                        st.session_state["quiz_open"] = None
+                        st.session_state.quiz_ast_questions = []
+                        st.session_state.quiz_ast_submitted = False
+                        st.rerun()
 
             run_ast_quiz()
 
@@ -3564,153 +3707,302 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
                 q = st.session_state.quiz_semantic_q
                 seconds = st.session_state.get("quiz_time", 30)
 
-                components.html(f"""
-                <div id="timer-bar-wrap" style="margin-bottom:12px;">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                    <span style="color:#38bdf8;font-family:monospace;font-size:1.1em;font-weight:bold;">
-                      ⏱ Timp rămas: <span id="countdown">{seconds}</span>s
-                    </span>
-                  </div>
-                  <div style="background:#1e293b;border-radius:6px;height:10px;overflow:hidden;">
-                    <div id="timer-bar" style="background:linear-gradient(90deg,#8b5cf6,#38bdf8);height:10px;width:100%;border-radius:6px;transition:width 1s linear;"></div>
-                  </div>
-                </div>
-                <script>
-                  let total = {seconds};
-                  let left = total;
-                  const cd = document.getElementById('countdown');
-                  const bar = document.getElementById('timer-bar');
-                  const iv = setInterval(() => {{
-                    left--;
-                    if(cd) cd.textContent = left;
-                    if(bar) bar.style.width = (left/total*100)+'%';
-                    if(bar && left < total*0.3) bar.style.background='linear-gradient(90deg,#ef4444,#f59e0b)';
-                    if(left<=0){{clearInterval(iv);if(cd)cd.textContent='0 — Timp expirat!';}}
-                  }}, 1000);
-                </script>
-                """, height=80)
+                if not st.session_state.get("quiz_semantic_submitted", False):
+                    components.html(f"""
+                    <div id="timer-bar-wrap" style="margin-bottom:12px;">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <span style="color:#38bdf8;font-family:monospace;font-size:1.1em;font-weight:bold;">
+                          ⏱ Timp rămas: <span id="countdown">{seconds}</span>s
+                        </span>
+                      </div>
+                      <div style="background:#1e293b;border-radius:6px;height:10px;overflow:hidden;">
+                        <div id="timer-bar" style="background:linear-gradient(90deg,#8b5cf6,#38bdf8);height:10px;width:100%;border-radius:6px;transition:width 1s linear;"></div>
+                      </div>
+                    </div>
+                    <script>
+                      let total = {seconds};
+                      let left = total;
+                      const cd = document.getElementById('countdown');
+                      const bar = document.getElementById('timer-bar');
+                      const iv = setInterval(() => {{
+                        left--;
+                        if(cd) cd.textContent = left;
+                        if(bar) bar.style.width = (left/total*100)+'%';
+                        if(bar && left < total*0.3) bar.style.background='linear-gradient(90deg,#ef4444,#f59e0b)';
+                        if(left<=0){{clearInterval(iv);if(cd)cd.textContent='0 — Timp expirat!';}}
+                      }}, 1000);
+                    </script>
+                    """, height=80)
 
-                st.markdown("**Fragmentul de cod:**")
-                st.code(q["code"][:500], language="python")
-                st.markdown("**Care descriere se potrivește cel mai bine?**")
-                selected = st.radio("", options=q["options"], index=None, label_visibility="collapsed")
+                    st.markdown("**Fragmentul de cod:**")
+                    st.code(q["code"][:500], language="python")
+                    st.markdown("**Care descriere se potrivește cel mai bine cu acest fragment de cod?**")
+                    selected = st.radio("", options=q["options"], index=None, label_visibility="collapsed")
 
-                if st.button("Verifică cu CodeBERT", use_container_width=True, type="primary"):
-                    if selected:
-                        with st.spinner("CodeBERT calculează similaritatea cosinus..."):
-                            indexer = st.session_state.indexer
-                            code_emb = indexer.get_embeddings([q["code"]])[0]
-                            scores = {opt: cosine_sim(code_emb, indexer.get_embeddings([opt])[0]) for opt in q["options"]}
-                        max_s = max(scores.values())
-                        for opt, score in sorted(scores.items(), key=lambda x: -x[1]):
-                            is_correct = opt == q["correct"]
-                            is_sel = opt == selected
-                            bar_w = int(score / max_s * 100) if max_s else 0
-                            label = (" ✅ Corect" if is_correct else "") + (" ← ales" if is_sel else "")
-                            bc = "rgba(74,222,128,0.4)" if is_correct else "rgba(255,255,255,0.05)"
-                            st.markdown(f"""
-                            <div style="border:1px solid {bc};border-radius:8px;padding:10px;margin-bottom:8px;background:rgba(255,255,255,0.02);">
-                              <div style="display:flex;justify-content:space-between;">
-                                <span style="color:#c9d1d9;font-size:0.88em;">{opt[:100]}{'...' if len(opt)>100 else ''}{label}</span>
-                                <span style="color:#38bdf8;font-weight:bold;">cos={score:.4f}</span>
-                              </div>
-                              <div style="background:#1e293b;border-radius:4px;height:6px;margin-top:6px;">
-                                <div style="background:{'#4ade80' if is_correct else '#8b5cf6'};width:{bar_w}%;height:6px;border-radius:4px;"></div>
-                              </div>
-                            </div>""", unsafe_allow_html=True)
-                        is_correct_answer = selected == q["correct"]
-                        verdict = "✅ Corect!" if is_correct_answer else f"❌ Greșit — răspunsul cu scorul cosinus maxim era descrierea corectă."
+                    if st.button("Verifică cu CodeBERT", use_container_width=True, type="primary"):
+                        if selected:
+                            st.session_state.quiz_semantic_submitted = True
+                            st.session_state.quiz_semantic_selected = selected
+                            with st.spinner("CodeBERT calculează similaritatea cosinus..."):
+                                indexer = st.session_state.indexer
+                                code_emb = indexer.get_embeddings([q["code"]])[0]
+                                scores = {opt: cosine_sim(code_emb, indexer.get_embeddings([opt])[0]) for opt in q["options"]}
+                            st.session_state.quiz_semantic_scores = scores
+                            is_correct = selected == q["correct"]
+                            score_val = 1 if is_correct else 0
+                            
+                            # Log to history
+                            if "quiz_history" not in st.session_state:
+                                st.session_state.quiz_history = []
+                            import datetime
+                            pct = 100 if is_correct else 0
+                            st.session_state.quiz_history.append({
+                                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "type": "Quiz Semantic (CodeBERT)",
+                                "score": f"{score_val}/1",
+                                "pct": pct
+                            })
+                            st.rerun()
+                        else:
+                            st.warning("Selectează o variantă înainte de verificare.")
+                else:
+                    # Show results and Close button
+                    scores = st.session_state.quiz_semantic_scores
+                    selected = st.session_state.quiz_semantic_selected
+                    max_s = max(scores.values()) if scores else 0
+                    
+                    st.write("### Evaluare Semantică CodeBERT")
+                    for opt, score in sorted(scores.items(), key=lambda x: -x[1]):
+                        is_correct = opt == q["correct"]
+                        is_sel = opt == selected
+                        bar_w = int(score / max_s * 100) if max_s else 0
+                        label = (" ✅ Răspuns Corect" if is_correct else "") + (" ← Ales de tine" if is_sel else "")
+                        bc = "rgba(74,222,128,0.4)" if is_correct else "rgba(255,255,255,0.05)"
                         st.markdown(f"""
-                        <div style="text-align:center;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);border-radius:12px;padding:16px;margin-top:12px;">
-                            <h3 style="color:#a78bfa;">{verdict}</h3>
+                        <div style="border:1px solid {bc};border-radius:8px;padding:10px;margin-bottom:8px;background:rgba(255,255,255,0.025);">
+                          <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#c9d1d9;font-size:0.88em;font-weight:500;">{opt[:110]}{'...' if len(opt)>110 else ''}{label}</span>
+                            <span style="color:#38bdf8;font-weight:bold;">cos={score:.4f}</span>
+                          </div>
+                          <div style="background:#1e293b;border-radius:4px;height:6px;margin-top:6px;">
+                            <div style="background:{'#4ade80' if is_correct else '#8b5cf6'};width:{bar_w}%;height:6px;border-radius:4px;"></div>
+                          </div>
                         </div>""", unsafe_allow_html=True)
+                    
+                    is_correct_answer = selected == q["correct"]
+                    verdict = "✅ Excelent! Răspuns Corect!" if is_correct_answer else f"❌ Greșit — descrierea cu similaritatea cosinus maximă față de CodeBERT era varianta corectă."
+                    st.markdown(f"""
+                    <div style="text-align:center;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);border-radius:12px;padding:16px;margin-top:12px;">
+                        <h3 style="color:#a78bfa;">{verdict}</h3>
+                    </div>""", unsafe_allow_html=True)
+                    
+                    if st.button("Închide și Revino la Dashboard", use_container_width=True, type="primary"):
                         st.session_state["quiz_open"] = None
-                    else:
-                        st.warning("Selectează o variantă înainte de verificare.")
+                        st.session_state.quiz_semantic_q = None
+                        st.session_state.quiz_semantic_submitted = False
+                        st.session_state.quiz_semantic_selected = None
+                        st.session_state.quiz_semantic_scores = None
+                        st.rerun()
 
             run_semantic_quiz()
 
+        # 4. Expandable Attempts History table & Clear utility
+        if st.session_state.get("quiz_history"):
+            st.write("---")
+            st.markdown("### 📋 Istoricul Încercărilor tale")
+            
+            # Render beautifully formatted HTML Table
+            rows_html = ""
+            for i, attempt in enumerate(reversed(st.session_state.quiz_history)):
+                pct = attempt["pct"]
+                if pct == 100:
+                    badge = '<span style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.3);padding:3px 8px;border-radius:12px;font-size:0.8em;font-weight:bold;">🔥 Perfect</span>'
+                elif pct >= 60:
+                    badge = '<span style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);padding:3px 8px;border-radius:12px;font-size:0.8em;font-weight:bold;">🌟 Promovat</span>'
+                else:
+                    badge = '<span style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:3px 8px;border-radius:12px;font-size:0.8em;font-weight:bold;">✏️ Revizuiește</span>'
+                
+                rows_html += f"""
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:12px;color:#94a3b8;font-size:0.9em;">#{len(st.session_state.quiz_history) - i}</td>
+                    <td style="padding:12px;color:#f1f5f9;font-size:0.9em;font-weight:500;">{attempt['timestamp']}</td>
+                    <td style="padding:12px;color:#c084fc;font-size:0.9em;font-weight:500;">{attempt['type']}</td>
+                    <td style="padding:12px;color:#f1f5f9;font-size:0.9em;font-family:monospace;font-weight:bold;">{attempt['score']}</td>
+                    <td style="padding:12px;color:#38bdf8;font-size:0.9em;font-weight:bold;">{pct}%</td>
+                    <td style="padding:12px;text-align:right;">{badge}</td>
+                </tr>
+                """
+            
+            table_html = f"""
+            <div style="overflow-x:auto;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(15,23,42,0.3);margin-top:16px;">
+                <table style="width:100%;border-collapse:collapse;text-align:left;">
+                    <thead>
+                        <tr style="background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.08);">
+                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">ID</th>
+                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">Dată & Oră</th>
+                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">Tip Quiz</th>
+                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">Scor</th>
+                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">Procent</th>
+                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;text-align:right;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_html}
+                    </tbody>
+                </table>
+            </div>
+            """
+            import textwrap
+            st.markdown(textwrap.dedent(table_html), unsafe_allow_html=True)
+            
+            col_btn1, col_btn2 = st.columns([6, 1])
+            with col_btn2:
+                st.write("")
+                if st.button("🗑️ Șterge Istoric", use_container_width=True, type="secondary", key="clear_history_btn"):
+                    st.session_state.quiz_history = []
+                    st.rerun()
+
     # ----------------- TAB 6: ANALIZĂ & RECOMANDĂRI -----------------
     with tab6:
-        dup_tab, complexity_tab, dead_tab, smells_tab = st.tabs([
+        dup_tab, complexity_tab, dead_tab, transformer_inspector_tab = st.tabs([
             "Detector Cod Duplicat",
             "Complexitate Ciclomatică",
             "Cod Mort (Dead Code)",
-            "Code Smells & Recomandări",
+            "Inspector Conceptuale CodeBERT (AI)",
         ])
 
         # --- SUB-TAB 5.1: DETECTOR COD DUPLICAT ---
         with dup_tab:
-            st.markdown("## Detector Cod Duplicat — Similarity Matrix CodeBERT")
-            st.markdown("Reconstruiește toți vectorii de embeddings din indexul FAISS și calculează **similaritatea cosinus** între toate perechile de chunk-uri. Perechile cu similaritate > 0.88 sunt marcate ca potențial duplicate — Transformer-ul detectează duplicarea **semantică**, nu doar textuală.")
+            st.markdown("## Detector Cod Duplicat (Automat & Manual)")
+            st.markdown("Transformer-ul detectează duplicarea **semantică**, nu doar textuală, utilizând CodeBERT și SequenceMatcher.")
             st.write("---")
 
-            if st.button("Rulează Detectorul de Cod Duplicat", use_container_width=True):
-                with st.spinner("Se reconstruiesc embeddings din FAISS și se calculează matricea de similaritate..."):
-                    try:
-                        indexer = st.session_state.indexer
-                        embeddings = get_all_embeddings(indexer)
-                        if embeddings is not None:
-                            pairs = find_duplicates(embeddings, st.session_state.chunks)
-                            st.session_state.analysis_duplicates = pairs
-                        else:
-                            st.warning("Indexul FAISS nu conține embeddings. Re-procesează proiectul.")
-                    except Exception as e:
-                        st.error(f"Eroare: {str(e)}")
-                st.rerun()
+            dup_mode_tab1, dup_mode_tab2 = st.tabs([
+                "🔍 Scanare Automată Proiect",
+                "⚡ Comparator Manual Interactiv"
+            ])
 
-            if st.session_state.analysis_duplicates is not None:
-                pairs = st.session_state.analysis_duplicates
-                if not pairs:
-                    st.success("Nu s-au detectat fragmente de cod semantice duplicate (threshold > 0.88). Codebase-ul pare bine structurat.")
+            with dup_mode_tab1:
+                st.markdown("### Scanare Matrice de Similaritate Proiect")
+                st.markdown("Reconstruiește toți vectorii de embeddings din indexul FAISS și caută automat perechi cu similaritate > 0.88.")
+                
+                if st.button("Rulează Scanarea Proiectului", use_container_width=True, key="run_auto_duplicates"):
+                    with st.spinner("Se reconstruiesc embeddings din FAISS..."):
+                        try:
+                            indexer = st.session_state.indexer
+                            embeddings = get_all_embeddings(indexer)
+                            if embeddings is not None:
+                                pairs = find_duplicates(embeddings, st.session_state.chunks)
+                                st.session_state.analysis_duplicates = pairs
+                            else:
+                                st.warning("Indexul FAISS nu conține embeddings. Re-procesează proiectul din sidebar.")
+                        except Exception as e:
+                            st.error(f"Eroare: {str(e)}")
+                    st.rerun()
+
+                if st.session_state.analysis_duplicates is not None:
+                    pairs = st.session_state.analysis_duplicates
+                    if not pairs:
+                        st.success("Nu s-au detectat fragmente de cod semantice duplicate (threshold > 0.88) în codebase.")
+                    else:
+                        st.warning(f"S-au detectat **{len(pairs)}** perechi de fragmente semantice similare:")
+                        for rank, (i, j, sim) in enumerate(pairs):
+                            c1 = st.session_state.chunks[i]
+                            c2 = st.session_state.chunks[j]
+                            pct = int(sim * 100)
+                            st.markdown(f"""
+                            <div style="background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.35); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                    <b style="color:#f59e0b;">Pereche #{rank+1} — Similaritate cosinus: {sim:.4f} ({pct}%)</b>
+                                </div>
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:0.9em; color:#94a3b8;">
+                                    <div>📄 <b style="color:#c9d1d9;">{c1.get('name','?')}</b><br>{c1['file_path']} · liniile {c1['start_line']}–{c1['end_line']}</div>
+                                    <div>📄 <b style="color:#c9d1d9;">{c2.get('name','?')}</b><br>{c2['file_path']} · liniile {c2['start_line']}–{c2['end_line']}</div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            with st.expander(f"Cod + sugestie refactorizare — Pereche #{rank+1}"):
+                                col_a, col_b = st.columns(2)
+                                with col_a:
+                                    st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>❌ {c1.get('name','?')}</span>", unsafe_allow_html=True)
+                                    st.code(c1["content"][:600], language="python")
+                                with col_b:
+                                    st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>❌ {c2.get('name','?')}</span>", unsafe_allow_html=True)
+                                    st.code(c2["content"][:600], language="python")
+                                
+                                try:
+                                    shared_code, ref_c1, ref_c2 = generate_real_duplicate_refactoring(c1, c2)
+                                    st.markdown("<span style='color:#22c55e; font-weight:bold;'>✅ Sugestie refactorizare extrasă:</span>", unsafe_allow_html=True)
+                                    st.code(shared_code, language="python")
+                                except Exception as ref_err:
+                                    st.warning(f"Refactorizarea nu a putut fi generată: {str(ref_err)}")
                 else:
-                    st.warning(f"S-au detectat **{len(pairs)}** perechi de fragmente semantice similare:")
-                    for rank, (i, j, sim) in enumerate(pairs):
-                        c1 = st.session_state.chunks[i]
-                        c2 = st.session_state.chunks[j]
-                        pct = int(sim * 100)
-                        st.markdown(f"""
-                        <div style="background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.35); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
-                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                                <b style="color:#f59e0b;">Pereche #{rank+1} — Similaritate cosinus: {sim:.4f} ({pct}%)</b>
-                            </div>
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:0.9em; color:#94a3b8;">
-                                <div>📄 <b style="color:#c9d1d9;">{c1.get('name','?')}</b><br>{c1['file_path']} · liniile {c1['start_line']}–{c1['end_line']}</div>
-                                <div>📄 <b style="color:#c9d1d9;">{c2.get('name','?')}</b><br>{c2['file_path']} · liniile {c2['start_line']}–{c2['end_line']}</div>
-                            </div>
-                            <div style="margin-top:10px; color:#38bdf8; font-size:0.85em;">
-                                💡 <b>Recomandare:</b> Extrage logica comună într-o funcție utilitară partajată și înlocuiește ambele instanțe cu apelul la aceasta. Aplică principiul DRY.
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        with st.expander(f"Cod + sugestie refactorizare — Pereche #{rank+1}"):
-                            col_a, col_b = st.columns(2)
-                            with col_a:
-                                st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>❌ {c1.get('name','?')}</span> — `{c1['file_path']}`", unsafe_allow_html=True)
-                                st.code(c1["content"][:600], language="python")
-                            with col_b:
-                                st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>❌ {c2.get('name','?')}</span> — `{c2['file_path']}`", unsafe_allow_html=True)
-                                st.code(c2["content"][:600], language="python")
-                            # Sugestie de refactorizare directă
+                    st.info("Apasă butonul de mai sus pentru a scana proiectul curent.")
+
+            with dup_mode_tab2:
+                st.markdown("### Comparator Semantic Personalizat de Cod")
+                st.markdown("Lipește orice două funcții sau blocuri de cod mai jos. Transformer-ul CodeBERT va calcula procentul lor de compatibilitate semantică, iar SequenceMatcher va extrage automat porțiunea comună pentru refactorizare.")
+                st.write("")
+
+                # Default prefilled example codes
+                default_code_1 = """def calculate_discounted_price(price, discount):
+    # Calculates the final discounted price
+    final_price = price - (price * discount / 100.0)
+    print(f"Price after discount is: {final_price}")
+    return final_price"""
+
+                default_code_2 = """def get_final_cost(cost, tax_rate):
+    # Calculates the final discounted price
+    final_cost = cost - (cost * tax_rate / 100.0)
+    print(f"Total cost calculated is: {final_cost}")
+    return final_cost"""
+
+                col_manual_a, col_manual_b = st.columns(2)
+                with col_manual_a:
+                    st.markdown("**Fragment Cod A:**")
+                    manual_code_a = st.text_area("Fragment A", value=default_code_1, height=180, key="manual_code_a_area", label_visibility="collapsed")
+                with col_manual_b:
+                    st.markdown("**Fragment Cod B:**")
+                    manual_code_b = st.text_area("Fragment B", value=default_code_2, height=180, key="manual_code_b_area", label_visibility="collapsed")
+
+                manual_submitted = st.button("🚀 Compară Fragmentele & Sugerează Refactorizare", use_container_width=True, type="primary", key="btn_compare_manual")
+
+                if manual_submitted:
+                    if manual_code_a.strip() and manual_code_b.strip():
+                        with st.spinner("CodeBERT măsoară similaritatea vectorială a fragmentelor..."):
                             try:
-                                shared_code, ref_c1, ref_c2 = generate_real_duplicate_refactoring(c1, c2)
-                                st.markdown("<span style='color:#22c55e; font-weight:bold;'>✅ Cum refactorizezi — extrage logica comună în siguranță:</span>", unsafe_allow_html=True)
+                                indexer = st.session_state.indexer
+                                emb1 = indexer.get_embeddings([manual_code_a])[0]
+                                emb2 = indexer.get_embeddings([manual_code_b])[0]
+                                sim_val = cosine_sim(emb1, emb2)
+                                pct_val = int(sim_val * 100)
                                 
-                                st.markdown("⚙️ **1. Definește funcția utilitară cu logica extrasă:**")
-                                st.code(shared_code, language="python")
+                                # Mock chunks for refactoring engine
+                                mock_c1 = {"content": manual_code_a, "name": "func_a", "args": ["price", "discount"], "type": "function"}
+                                mock_c2 = {"content": manual_code_b, "name": "func_b", "args": ["cost", "tax_rate"], "type": "function"}
                                 
-                                st.markdown("🧱 **2. Înlocuiește implementările originale:**")
-                                col_ref1, col_ref2 = st.columns(2)
-                                with col_ref1:
-                                    st.markdown(f"**`{c1.get('name','?')}` refactorizat:**")
-                                    st.code(ref_c1, language="python")
-                                with col_ref2:
-                                    st.markdown(f"**`{c2.get('name','?')}` refactorizat:**")
-                                    st.code(ref_c2, language="python")
-                            except Exception as ref_err:
-                                st.warning(f"Nu s-a putut genera sugestia detaliată: {str(ref_err)}")
-            else:
-                st.info("Apasă butonul de mai sus pentru a rula analiza.")
+                                shared_func_m, ref_c1_m, ref_c2_m = generate_real_duplicate_refactoring(mock_c1, mock_c2)
+                                
+                                st.write("---")
+                                if sim_val >= 0.88:
+                                    st.success(f"🔥 **Detecție Cod Duplicat Semantic (Similaritate: {sim_val:.4f} · {pct_val}%)**")
+                                else:
+                                    st.info(f"💡 **Similaritate Semantică moderată (Similaritate: {sim_val:.4f} · {pct_val}%)**")
+                                    
+                                st.markdown("⚙️ **Logica extrasă din ambele fragmente:**")
+                                st.code(shared_func_m, language="python")
+                                
+                                col_ref_m1, col_ref_m2 = st.columns(2)
+                                with col_ref_m1:
+                                    st.markdown("**Fragment A Refactorizat:**")
+                                    st.code(ref_c1_m, language="python")
+                                with col_ref_m2:
+                                    st.markdown("**Fragment B Refactorizat:**")
+                                    st.code(ref_c2_m, language="python")
+                            except Exception as manual_err:
+                                st.error(f"Eroare la analiză: {str(manual_err)}")
+                    else:
+                        st.warning("Te rog completează ambele zone de cod cu text.")
 
         # --- SUB-TAB: COMPLEXITATE CICLOMATICĂ ---
         with complexity_tab:
@@ -3719,82 +4011,118 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
             st.write("---")
 
             if st.button("Calculează Complexitatea", use_container_width=True, key="btn_complexity"):
-                with st.spinner("Se analizează structura AST a fiecărei funcții..."):
+                with st.spinner("Se analizează structura AST a fiecărei funcții și metode..."):
                     try:
                         results_cc = []
                         for chunk in st.session_state.chunks:
-                            if chunk.get("type") != "function":
+                            # Analizăm doar codul Python (.py)
+                            if not chunk.get("file_path", "").endswith(".py"):
                                 continue
+                            
                             code = chunk.get("content", "")
                             try:
                                 tree = ast.parse(code)
                             except:
                                 continue
-                            cc = 1
+                            
+                            # Parcurgem arborele sintactic pentru a găsi toate definițiile de funcții/metode
                             for node in ast.walk(tree):
-                                if isinstance(node, (ast.If, ast.For, ast.While, ast.ExceptHandler,
-                                                     ast.With, ast.AsyncFor, ast.AsyncWith)):
-                                    cc += 1
-                                elif isinstance(node, ast.BoolOp):
-                                    cc += len(node.values) - 1
-                                elif isinstance(node, (ast.comprehension,)):
-                                    cc += 1
-                            n_lines = chunk.get("end_line", 0) - chunk.get("start_line", 0)
-                            results_cc.append({
-                                "name": chunk.get("name", "?"),
-                                "file": chunk.get("file_path", "?"),
-                                "start": chunk.get("start_line", 0),
-                                "cc": cc,
-                                "lines": n_lines,
-                            })
-                        st.session_state["cc_results"] = sorted(results_cc, key=lambda x: x["cc"], reverse=True)
+                                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                    func_name = node.name
+                                    
+                                    # Calculăm CC pentru această funcție/metodă
+                                    cc = 1
+                                    for sub_node in ast.walk(node):
+                                        # Evităm numărarea structurilor de control din interiorul funcțiilor/metodelor imbricate (inner functions)
+                                        if sub_node is not node and isinstance(sub_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                            continue
+                                            
+                                        if isinstance(sub_node, (ast.If, ast.For, ast.While, ast.ExceptHandler,
+                                                             ast.With, ast.AsyncFor, ast.AsyncWith)):
+                                            cc += 1
+                                        elif isinstance(sub_node, ast.BoolOp):
+                                            cc += len(sub_node.values) - 1
+                                        elif isinstance(sub_node, (ast.comprehension,)):
+                                            cc += 1
+                                            
+                                    start_line = node.lineno
+                                    end_line = getattr(node, "end_lineno", start_line + 5)
+                                    n_lines = end_line - start_line + 1
+                                    
+                                    # Determinăm dacă este o metodă în interiorul unei clase
+                                    parent_class = ""
+                                    if chunk.get("type") == "class":
+                                        parent_class = chunk.get("name", "")
+                                        
+                                    display_name = f"{parent_class}.{func_name}" if parent_class else func_name
+                                    
+                                    # Adăugăm în listă
+                                    results_cc.append({
+                                        "name": display_name,
+                                        "file": chunk.get("file_path", "?"),
+                                        "start": chunk.get("start_line", 0) + start_line - 1,
+                                        "cc": cc,
+                                        "lines": n_lines,
+                                    })
+                        
+                        # Deduplicare după (cale_fișier, nume, linie_start)
+                        seen_cc = set()
+                        unique_cc = []
+                        for r in results_cc:
+                            key = (r["file"], r["name"], r["start"])
+                            if key not in seen_cc:
+                                seen_cc.add(key)
+                                unique_cc.append(r)
+                                
+                        st.session_state["cc_results"] = sorted(unique_cc, key=lambda x: x["cc"], reverse=True)
                     except Exception as e:
                         st.error(str(e))
 
-            if "cc_results" in st.session_state and st.session_state["cc_results"]:
-                data = st.session_state["cc_results"]
-                high   = [r for r in data if r["cc"] > 10]
-                medium = [r for r in data if 5 < r["cc"] <= 10]
-                low    = [r for r in data if r["cc"] <= 5]
+            if "cc_results" in st.session_state:
+                if st.session_state["cc_results"]:
+                    data = st.session_state["cc_results"]
+                    high   = [r for r in data if r["cc"] > 10]
+                    medium = [r for r in data if 5 < r["cc"] <= 10]
+                    low    = [r for r in data if r["cc"] <= 5]
 
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Funcții analizate", len(data))
-                c2.metric("🔴 Complexitate mare (>10)", len(high))
-                c3.metric("🟡 Medie (6–10)", len(medium))
-                c4.metric("🟢 Mică (≤5)", len(low))
-                st.write("---")
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Funcții analizate", len(data))
+                    c2.metric("🔴 Complexitate mare (>10)", len(high))
+                    c3.metric("🟡 Medie (6–10)", len(medium))
+                    c4.metric("🟢 Mică (≤5)", len(low))
+                    st.write("---")
 
-                # Grafic bar cu plotly
-                try:
-                    import plotly.graph_objects as go
-                    names  = [f"{r['name']} ({r['file']})" for r in data[:20]]
-                    values = [r["cc"] for r in data[:20]]
-                    colors = ["#ef4444" if v > 10 else "#f59e0b" if v > 5 else "#22c55e" for v in values]
-                    fig = go.Figure(go.Bar(
-                        x=values, y=names, orientation="h",
-                        marker_color=colors,
-                        text=values, textposition="outside",
-                    ))
-                    fig.update_layout(
-                        title="Top 20 funcții după complexitate ciclomatică",
-                        xaxis_title="Complexitate Ciclomatică (CC)",
-                        yaxis=dict(autorange="reversed"),
-                        height=max(350, len(data[:20]) * 28),
-                        margin=dict(l=220, r=60, t=50, b=40),
-                        paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
-                        font=dict(color="#e2e8f0"),
-                        xaxis=dict(gridcolor="#1e293b"),
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                except ImportError:
-                    pass
+                    # Grafic bar cu plotly
+                    try:
+                        import plotly.graph_objects as go
+                        names  = [f"{r['name']} ({r['file']})" for r in data[:20]]
+                        values = [r["cc"] for r in data[:20]]
+                        colors = ["#ef4444" if v > 10 else "#f59e0b" if v > 5 else "#22c55e" for v in values]
+                        fig = go.Figure(go.Bar(
+                            x=values, y=names, orientation="h",
+                            marker_color=colors,
+                            text=values, textposition="outside",
+                        ))
+                        fig.update_layout(
+                            title="Top 20 funcții după complexitate ciclomatică",
+                            xaxis_title="Complexitate Ciclomatică (CC)",
+                            yaxis=dict(autorange="reversed"),
+                            height=max(350, len(data[:20]) * 28),
+                            margin=dict(l=220, r=60, t=50, b=40),
+                            paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+                            font=dict(color="#e2e8f0"),
+                            xaxis=dict(gridcolor="#1e293b"),
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    except ImportError:
+                        pass
 
-                st.write("---")
-                if high:
-                    st.markdown(f"### 🔴 Funcții cu complexitate mare (>10) — {len(high)} funcții")
-                    for r in high:
-                        with st.expander(f"**{r['name']}** — CC={r['cc']} · `{r['file']}` linia {r['start']} · {r['lines']} linii"):
-                            st.markdown(f"""
+                    st.write("---")
+                    if high:
+                        st.markdown(f"### 🔴 Funcții cu complexitate mare (>10) — {len(high)} funcții")
+                        for r in high:
+                            with st.expander(f"**{r['name']}** — CC={r['cc']} · `{r['file']}` linia {r['start']} · {r['lines']} linii"):
+                                st.markdown(f"""
 | Metrică | Valoare |
 |---------|---------|
 | Complexitate Ciclomatică | **{r['cc']}** |
@@ -3802,9 +4130,9 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
 | Fișier | `{r['file']}` |
 | Linia de start | {r['start']} |
 """)
-                            st.warning(f"CC={r['cc']} > 10: funcția are prea multe ramificații. Recomandare: **împarte în sub-funcții** sau extrage logica în funcții helper specializate.")
-            elif "cc_results" in st.session_state:
-                st.info("Apasă butonul de mai sus pentru a calcula.")
+                                st.warning(f"CC={r['cc']} > 10: funcția are prea multe ramificații. Recomandare: **împarte în sub-funcții** sau extrage logica în funcții helper specializate.")
+                else:
+                    st.warning("Nu s-au găsit funcții sau metode Python în acest proiect pentru a calcula complexitatea ciclomatică.")
             else:
                 st.info("Apasă **Calculează Complexitatea** pentru a analiza toate funcțiile din proiect.")
 
@@ -3880,113 +4208,166 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
             else:
                 st.info("Apasă **Detectează Codul Mort** pentru a scana proiectul.")
 
-        # --- SUB-TAB 5.2: CODE SMELLS & RECOMANDĂRI ---
-        with smells_tab:
-            st.markdown("## Code Smells & Recomandări — Analiză Hibridă (AST + CodeBERT)")
-            st.markdown("""
-            Fiecare fragment de cod este comparat semantic cu **10 descriptori de cod problematic** folosind CodeBERT.
-            Analiza combină două surse:
-            - **CodeBERT** — similaritate cosinus între vectorii de 768-D ai codului și ai descrierilor de code smells
-            - **AST** — verificări structurale deterministe (nr. argumente, lungime funcție, docstring)
-            """)
+        # --- SUB-TAB 5.2: INSPECTOR CONCEPTUALE CODEBERT (AI) ---
+        with transformer_inspector_tab:
+            st.markdown("## 🌌 Inspector Conceptuale CodeBERT — Proiecție în Spațiul Vectorial (AI)")
+            st.markdown("Explorează modul în care rețeaua bimodală Transformer percepe, vectorizează și asociază logic funcțiile tale din codebase cu concepte abstracte de programare în 768 de dimensiuni.")
             st.write("---")
 
-            col_run, col_clear = st.columns([1, 1])
-            with col_run:
-                if st.button("Rulează Analiza Code Smells", use_container_width=True):
-                    prog_bar = st.progress(0)
-                    prog_text = st.empty()
-                    def smell_progress(pct, text):
-                        prog_bar.progress(pct)
-                        prog_text.text(text)
-                    try:
-                        results = analyze_code_smells(
-                            st.session_state.chunks,
-                            st.session_state.indexer,
-                            progress_cb=smell_progress
-                        )
-                        st.session_state.analysis_smells = results
-                    except Exception as e:
-                        st.error(f"Eroare analiză: {str(e)}")
-                    prog_bar.empty()
-                    prog_text.empty()
-                    st.rerun()
-            with col_clear:
-                if st.button("Resetează Rezultatele", use_container_width=True):
-                    st.session_state.analysis_smells = None
-                    st.rerun()
-
-            if st.session_state.analysis_smells is not None:
-                results = st.session_state.analysis_smells
-                total_chunks = len(st.session_state.chunks)
-                affected = len(results)
-                total_issues = sum(len(r["smells"]) for r in results)
-
-                # Metrici sumar
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Fragmente analizate", total_chunks)
-                m2.metric("Fragmente cu probleme", affected)
-                m3.metric("Probleme totale detectate", total_issues)
-                st.write("---")
-
-                if not results:
-                    st.success("Nicio problemă detectată. Codebase-ul pare curat!")
-                else:
-                    # Statistici pe tip severitate
-                    err_count = sum(1 for r in results for s in r["smells"] if s["severity"] == "error")
-                    warn_count = sum(1 for r in results for s in r["smells"] if s["severity"] == "warning")
-                    info_count = sum(1 for r in results for s in r["smells"] if s["severity"] == "info")
-
-                    st.markdown(f"""
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:20px;">
-                        <div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:12px; text-align:center;">
-                            <div style="color:#ef4444; font-size:1.8em; font-weight:bold;">{err_count}</div>
-                            <div style="color:#94a3b8;">Erori</div>
-                        </div>
-                        <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px; text-align:center;">
-                            <div style="color:#f59e0b; font-size:1.8em; font-weight:bold;">{warn_count}</div>
-                            <div style="color:#94a3b8;">Avertismente</div>
-                        </div>
-                        <div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); border-radius:8px; padding:12px; text-align:center;">
-                            <div style="color:#38bdf8; font-size:1.8em; font-weight:bold;">{info_count}</div>
-                            <div style="color:#94a3b8;">Sugestii</div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    for r in results:
-                        chunk = r["chunk"]
-                        smells = r["smells"]
-                        has_error = any(s["severity"] == "error" for s in smells)
-                        icon = "🔴" if has_error else "🟡"
-                        with st.expander(f"{icon} {chunk.get('name','?')} — `{chunk['file_path']}` ({len(smells)} probleme)", expanded=has_error):
-                            for smell in sorted(smells, key=lambda x: {"error":0,"warning":1,"info":2}[x["severity"]]):
-                                color = SEVERITY_COLOR[smell["severity"]]
-                                label = SEVERITY_LABEL[smell["severity"]]
-                                score_txt = f"cos={smell['score']:.3f}" if smell["score"] < 1.0 else "AST"
-                                st.markdown(f"""
-                                <div style="background:rgba(255,255,255,0.03); border-left:3px solid {color}; padding:10px 14px; margin:8px 0 4px 0; border-radius:0 6px 6px 0;">
-                                    <span style="color:{color}; font-weight:bold;">[{label}]</span>
-                                    <span style="color:#c9d1d9; font-weight:600;"> {smell['name']}</span>
-                                    <span style="color:#64748b; font-size:0.75em; margin-left:8px;">{score_txt}</span>
-                                    <br><span style="color:#94a3b8; font-size:0.88em;">💡 {smell['rec']}</span>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                fix = generate_restructuring_suggestion(chunk, smell["name"])
-                                if fix:
-                                    before_code, after_code = fix
-                                    col_b, col_a = st.columns(2)
-                                    with col_b:
-                                        st.markdown("<span style='color:#ef4444; font-weight:bold;'>❌ Cod original</span>", unsafe_allow_html=True)
-                                        st.code(before_code, language="python")
-                                    with col_a:
-                                        st.markdown("<span style='color:#22c55e; font-weight:bold;'>✅ Cod refactorizat</span>", unsafe_allow_html=True)
-                                        st.code(after_code, language="python")
-                                else:
-                                    st.code(chunk["content"][:600], language="python", line_numbers=True)
-                                st.write("---")
+            if not st.session_state.project_processed or not st.session_state.chunks:
+                st.info("Încarcă și procesează un proiect din sidebar mai întâi pentru a inspecta modelul CodeBERT.")
             else:
-                st.info("Apasă **Rulează Analiza Code Smells** pentru a începe.")
+                # Filtrăm chunk-urile pentru a afișa doar clase și funcții reale pentru a fi extrem de sugestiv
+                filtered_chunks = [
+                    c for c in st.session_state.chunks 
+                    if c.get("type") in ("function", "class")
+                ]
+                
+                # Fallback în caz că nu există clase/funcții scrise structural
+                if not filtered_chunks:
+                    filtered_chunks = st.session_state.chunks
+                    
+                chunk_names = []
+                for c in filtered_chunks:
+                    ctype_label = c.get("type", "fragment").upper()
+                    if ctype_label == "FUNCTION":
+                        ctype_icon = "⚙️ FUNCȚIE"
+                    elif ctype_label == "CLASS":
+                        ctype_icon = "📦 CLASĂ"
+                    else:
+                        ctype_icon = "📄 TEXT"
+                    chunk_names.append(f"{ctype_icon}: {c.get('name', 'fragment')} — 📂 {c['file_path']}")
+                
+                selected_idx = st.selectbox(
+                    "Selectează funcția sau clasa pe care dorești să o analizezi în spațiul rețelei neurale:",
+                    range(len(filtered_chunks)),
+                    format_func=lambda x: chunk_names[x],
+                    key="trans_inspector_select"
+                )
+                
+                chunk = filtered_chunks[selected_idx]
+                st.write("")
+                
+                # 1. Plotly 768-D Vector Signature Chart
+                import plotly.graph_objects as go
+                
+                with st.spinner("CodeBERT generează vectorul de activare neuronală..."):
+                    try:
+                        indexer = st.session_state.indexer
+                        # Generăm embedding direct pe conținutul complet al elementului
+                        code_emb = indexer.get_embeddings([chunk["content"]])[0]
+                    except Exception as emb_err:
+                        st.error(f"Nu s-a putut genera embedding-ul elementului: {str(emb_err)}")
+                        code_emb = None
+                        
+                if code_emb is not None:
+                    fig_sig = go.Figure()
+                    fig_sig.add_trace(go.Scatter(
+                        x=list(range(len(code_emb))),
+                        y=list(code_emb),
+                        fill='tozeroy',
+                        mode='lines',
+                        name='Vector Signature',
+                        line=dict(color='#8b5cf6', width=1.5),
+                        fillcolor='rgba(139,92,246,0.1)'
+                    ))
+                    fig_sig.update_layout(
+                        title=dict(
+                            text=f"Amprenta Neuronală a funcției: <code>{chunk.get('name')}</code> (768 Coordonate Embeddings)",
+                            font=dict(color="#f1f5f9", size=14)
+                        ),
+                        xaxis=dict(title="Dimensiune Vector (0-767)", gridcolor="rgba(255,255,255,0.03)", tickfont=dict(color="#94a3b8")),
+                        yaxis=dict(title="Valoare Activare", gridcolor="rgba(255,255,255,0.03)", tickfont=dict(color="#94a3b8")),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        height=260,
+                        margin=dict(l=40, r=40, t=50, b=40)
+                    )
+                    st.plotly_chart(fig_sig, use_container_width=True)
+                    
+                    # 2. Conceptual Alignment Gauges
+                    concepts = {
+                        "🗄️ Baze de date & Stocare": "database query sql sqlite postgresql select insert storage tables",
+                        "🔒 Securitate & Criptare": "security cryptography hash encryption decrypt key private cipher jwt token",
+                        "🌐 Rețele & Protocoale Web": "network socket connection tcp ip client server request api http protocol",
+                        "⚙️ Paralelism & Procese": "subprocess shell command execution multithreading async concurrent thread",
+                        "🛠️ Utilitare Text & Fișiere": "regex string parsing utility zip directory extraction write load split"
+                    }
+                    
+                    with st.spinner("Se calculează alinierea semantică cu spațiul conceptual global..."):
+                        alignments = {}
+                        for name_c, desc_c in concepts.items():
+                            emb_c = indexer.get_embeddings([desc_c])[0]
+                            sim = cosine_sim(code_emb, emb_c)
+                            # Scalăm similaritatea cosinus pentru un interval responsive și frumos (0.10 - 0.55 standard în CodeBERT)
+                            sim_pct = int(max(0, min(1.0, (sim - 0.05) / 0.45)) * 100)
+                            alignments[name_c] = (sim, sim_pct)
+                            
+                    st.write("---")
+                    st.markdown("### 🎯 Alinierea Semantică la Concepte Globale (Transformer Dimensions)")
+                    st.markdown("CodeBERT măsoară proiecția vectorului de cod pe direcțiile vectoriale ale conceptelor de programare de mai jos:")
+                    
+                    # Răspândim în 5 coloane premium
+                    cols_g = st.columns(5)
+                    for idx_c, (name_c, (raw_s, pct_s)) in enumerate(alignments.items()):
+                        with cols_g[idx_c]:
+                            if pct_s >= 75:
+                                col_bar = "#4ade80" # Green (Match puternic)
+                                badge_color = "custom-badge-green"
+                            elif pct_s >= 40:
+                                col_bar = "#38bdf8" # Cyan (Match mediu)
+                                badge_color = "custom-badge-blue"
+                            else:
+                                col_bar = "#94a3b8" # Slate (Match redus)
+                                badge_color = "custom-badge"
+                                
+                            st.markdown(f"""
+                            <div style="background:rgba(30, 41, 59, 0.45); border:1px solid rgba(255, 255, 255, 0.06); border-radius:12px; padding:14px; text-align:center; height:185px;">
+                                <div style="font-size:0.8em; font-weight:600; color:#e2e8f0; height:45px; display:flex; align-items:center; justify-content:center; line-height:1.3;">{name_c}</div>
+                                <div style="color:{col_bar}; font-size:1.8em; font-weight:bold; margin-top:8px;">{pct_s}%</div>
+                                <div style="color:#64748b; font-size:0.75em; margin-bottom:12px; font-family:monospace;">cos={raw_s:.4f}</div>
+                                <div style="background:#1e293b; border-radius:4px; height:6px;">
+                                    <div style="background:{col_bar}; width:{pct_s}%; height:6px; border-radius:4px;"></div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                    # 3. Custom concept alignment tester
+                    st.write("---")
+                    st.markdown("### 🧪 Simulator Aliniere Concept Custom")
+                    st.markdown("Introduceți orice cuvânt sau expresie (în română sau engleză) pentru a verifica gradul de proximitate definit de Transformer între acel termen și funcția selectată.")
+                    
+                    col_test1, col_test2 = st.columns([3, 1])
+                    with col_test1:
+                        custom_concept = st.text_input(
+                            "Introdu conceptul tău:",
+                            value="validation",
+                            placeholder="ex: serialization, logger, networking...",
+                            label_visibility="collapsed",
+                            key="custom_concept_input"
+                        )
+                    with col_test2:
+                        test_btn = st.button("Calculează Proximitate", use_container_width=True, key="test_concept_btn")
+                        
+                    if (test_btn or custom_concept) and custom_concept:
+                        with st.spinner("Se vectorizează conceptul selectat..."):
+                            emb_custom = indexer.get_embeddings([custom_concept])[0]
+                            sim_custom = cosine_sim(code_emb, emb_custom)
+                            pct_custom = int(max(0, min(1.0, (sim_custom - 0.05) / 0.45)) * 100)
+                            
+                        col_res1, col_res2 = st.columns([1, 4])
+                        with col_res1:
+                            st.metric("Aliniere", f"{pct_custom}%")
+                        with col_res2:
+                            st.write("")
+                            st.markdown(f"""
+                            <div style="background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.25); border-radius:10px; padding:14px; border-left:4px solid #8b5cf6;">
+                                Proiecția semantică a funcției <code>{chunk.get('name')}</code> pe conceptul <b>"{custom_concept}"</b> este de <b>cos = {sim_custom:.4f}</b>.<br>
+                                <div style="background:#1e293b; border-radius:4px; height:8px; margin-top:8px; width:100%;">
+                                    <div style="background:linear-gradient(90deg, #38bdf8, #8b5cf6); width:{pct_custom}%; height:8px; border-radius:4px;"></div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
 
     # ----------------- TAB 7: ANALIZĂ DE IMPACT SEMANTIC (AI) -----------------
     with tab7:
@@ -4038,7 +4419,8 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
                         sim_results = indexer.search(code_content, top_k=15)
                         for c in sim_results:
                             c_name = c.get("name", "?")
-                            c_similarity = c.get("similarity", 0.0)
+                            c_similarity = c.get("semantic_score", c.get("score", 0.0))
+                            c["similarity"] = c_similarity  # Injectăm cheia pentru compatibilitate cu restul interfeței
                             
                             # Excludem elementul curent sau alte instanțe cu același nume
                             if c_name != selected_el and c_name.lower() != selected_el.lower():

@@ -187,6 +187,7 @@ class CodeBERTIndexer:
         pentru toate chunk-urile în raport cu query-ul.
         """
         import math
+        from pathlib import Path
         scores = np.zeros(len(self.chunks))
         if not self.chunks or not hasattr(self, 'tf_idf_vectors') or not self.tf_idf_vectors:
             return scores
@@ -217,12 +218,29 @@ class CodeBERTIndexer:
                 if token in doc_vector:
                     dot_product += q_val * doc_vector[token]
                     
-            # Boost suplimentar substanțial dacă numele chunk-ului (funcție/clasă) este conținut direct în query
+            q_lower = query.lower().strip()
             chunk_name = self.chunks[idx].get("name", "").lower()
-            if chunk_name and chunk_name in query.lower():
-                dot_product += 0.8 # Boost puternic pentru exact matches de nume!
+            content = self.chunks[idx].get("content", "").lower()
+            file_path = self.chunks[idx].get("file_path", "").lower()
+            file_name = Path(file_path).name.lower()
+            
+            # 1. Exact or Substring name match boost (in both directions!)
+            if q_lower and chunk_name:
+                if q_lower == chunk_name:
+                    dot_product += 2.0  # Absolute guarantee for exact match!
+                elif q_lower in chunk_name or chunk_name in q_lower:
+                    dot_product += 1.2  # Strong substring name match boost!
+                    
+            # 2. File path match boost
+            if q_lower and (q_lower in file_name or q_lower in file_path):
+                dot_product += 1.0  # File match boost!
                 
-            scores[idx] = dot_product
+            # 3. Code content literal substring match boost
+            if q_lower and q_lower in content:
+                dot_product += 0.8  # Strong literal code substring boost!
+
+            # Cap individual lexical score at 1.0 to preserve elegant scale
+            scores[idx] = min(1.0, dot_product)
             
         return scores
 
