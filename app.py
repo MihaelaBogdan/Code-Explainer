@@ -1594,6 +1594,258 @@ def suma_iterativa(n):
 }
 
 
+UNIVERSAL_DICT = {
+    "docker": {
+        "title": "🐳 Docker & Containerizarea Modernă",
+        "description": "Docker este o platformă open-source care permite dezvoltatorilor să împacheteze, distribuie și ruleze aplicații în medii izolate numite **containere**.",
+        "details": """
+Containerele Docker includ tot ce are nevoie o aplicație pentru a rula (cod, runtime, biblioteci de sistem), garantând că aceasta va funcționa la fel pe orice mașină (dezvoltare, testare, producție).
+Spre deosebire de Mașinile Virtuale (VM) care includ un întreg sistem de operare oaspete, containerele partajează kernel-ul sistemului de operare gazdă, fiind extrem de ușoare, rapide și eficiente ca resurse.
+
+### Elemente cheie:
+- **Dockerfile**: Un fișier text cu instrucțiuni pas cu pas pentru construirea unei imagini.
+- **Imagine Docker**: Un șablon read-only folosit pentru crearea containerelor.
+- **Container**: O instanță rulabilă a unei imagini.
+- **Docker Compose**: Un instrument pentru definirea și rularea aplicațiilor multi-container.
+""",
+        "code": """
+# Exemplu de Dockerfile simplu pentru Python
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["python", "app.py"]
+"""
+    },
+    "react": {
+        "title": "⚛️ React.js (Dezvoltare Frontend modernă)",
+        "description": "React este o bibliotecă JavaScript declarativă, eficientă și flexibilă pentru construirea de interfețe cu utilizatorul (UI), dezvoltată de Meta (Facebook).",
+        "details": """
+React se bazează pe **Componente** independente și reutilizabile, care își gestionează propria stare.
+
+### Concepte Fundamentale:
+- **Virtual DOM**: React creează o copie în memorie a DOM-ului real. Când starea se modifică, React calculează diferențele și actualizează eficient doar elementele modificate în pagină, asigurând performanțe excepționale.
+- **JSX**: O extensie de sintaxă care permite scrierea de cod asemănător cu HTML direct în JavaScript.
+- **State & Props**: `State` reprezintă datele interne ale unei componente (care se pot schimba), iar `Props` sunt datele primite de la componenta părinte.
+- **Hooks**: Funcții speciale (cum ar fi `useState` și `useEffect`) care permit componentelor funcționale să folosească starea și alte funcționalități React fără a scrie clase.
+""",
+        "code": """
+// Exemplu de componentă funcțională React cu Hooks
+import React, { useState, useEffect } from 'react';
+
+function Counter() {
+    const [count, setCount] = useState(0);
+
+    useEffect(() => {
+        document.title = `Ai dat click de ${count} ori`;
+    }, [count]);
+
+    return (
+        <button onClick={() => setCount(count + 1)}>
+            Click me: {count}
+        </button>
+    );
+}
+"""
+    },
+    "django": {
+        "title": "🦄 Django Framework (Web Development în Python)",
+        "description": "Django este un framework web Python de nivel înalt care încurajează dezvoltarea rapidă și designul curat. Urmează filosofia **'baterii incluse'**, oferind aproape tot ce este necesar direct din cutie.",
+        "details": """
+Django folosește arhitectura **MVT (Model-View-Template)**, similară cu clasicul MVC:
+- **Model**: Definește structura datelor și interacționează cu baza de date prin ORM.
+- **View**: Gestionează logica de business și returnează răspunsurile HTTP.
+- **Template**: Partea vizuală, fișiere HTML dinamice redate în browser.
+
+### Avantaje Majore:
+- **Securitate implicită**: Protejează automat aplicațiile de SQL Injection, Cross-Site Scripting (XSS) și Cross-Site Request Forgery (CSRF).
+- **Panou de Administrare**: Generează automat o interfață completă de admin pe baza modelelor definite.
+- **ORM puternic**: Permite interogarea bazei de date folosind exclusiv cod Python (fără a scrie SQL manual).
+""",
+        "code": """
+# Exemplu de model Django
+from django.db import models
+
+class Student(models.Model):
+    nume = models.CharField(max_length=100)
+    email = models.EmailField(unique=True)
+    nota_licenta = models.FloatField()
+
+    def __str__(self):
+        return self.nume
+"""
+    },
+    "machine_learning": {
+        "title": "🤖 Învățare Automată (Machine Learning & AI)",
+        "description": "Machine Learning (ML) reprezintă o subramură a Inteligenței Artificiale care se concentrează pe dezvoltarea de algoritmi capabili să învețe din date și să facă predicții fără a fi programați explicit.",
+        "details": """
+### Cele 3 categorii principale de ML:
+1. **Învățare Supervizată (Supervised Learning)**:
+   - Modelul este antrenat pe un set de date etichetate (input + output corect). Exemple: clasificare (ex: spam vs. email legitim) și regresie (ex: predicția prețului unei case).
+2. **Învățare Nesupervizată (Unsupervised Learning)**:
+   - Datele nu sunt etichetate, iar algoritmul încearcă să găsească tipare sau structuri ascunse. Exemplu: clustering (gruparea clienților după comportament).
+3. **Învățare prin Recompensă (Reinforcement Learning)**:
+   - Un agent învață să ia decizii într-un mediu pentru a maximiza o recompensă cumulativă (folosit în roboți, jocuri de șah/Go).
+""",
+        "code": """
+# Exemplu de regresie liniară simplă cu Scikit-Learn
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
+# Date de antrenare: dimensiune casă -> preț
+X = np.array([[50], [80], [120]])
+y = np.array([200000, 310000, 450000])
+
+model = LinearRegression()
+model.fit(X, y)
+
+# Predicție pentru o casă de 100 mp
+pret_predis = model.predict([[100]])
+print(f"Preț estimat: {pret_predis[0]:.2f} EUR")
+"""
+    },
+    "linux": {
+        "title": "🐧 Sistemul de Operare Linux & Linia de Comandă",
+        "description": "Linux este un sistem de operare open-source de tip Unix, extrem de robust și stabil, care rulează pe majoritatea serverelor de internet, supercomputerelor și dispozitivelor Android.",
+        "details": """
+Interacțiunea principală cu Linux se face prin **Terminal (Shell / Bash)**, oferind automatizări puternice.
+
+### Comenzi esențiale:
+- `ls` - listează fișierele și directoarele.
+- `cd [cale]` - schimbă directorul curent.
+- `pwd` - afișează calea absolută a directorului curent.
+- `grep [termen] [fișier]` - caută un text în interiorul unui fișier.
+- `chmod` - modifică permisiunile fișierelor.
+- `ps aux` - afișează procesele active din sistem.
+- `top` / `htop` - monitorizează în timp real resursele de sistem.
+""",
+        "code": """
+# Script Bash simplu pentru backup
+#!/bin/bash
+DIR_SURA="/Users/mihaela/Desktop/P3"
+DIR_DEST="/Users/mihaela/Backup"
+tar -czf "$DIR_DEST/backup_$(date +%F).tar.gz" "$DIR_SURA"
+echo "Backup finalizat cu succes!"
+"""
+    },
+    "html_css": {
+        "title": "🌐 Dezvoltare Web: HTML și CSS",
+        "description": "HTML și CSS reprezintă fundamentele dezvoltării web: HTML oferă structura structurală a paginii, iar CSS definește stilizarea și designul vizual.",
+        "details": """
+### Concepte Fundamentale:
+- **HTML (HyperText Markup Language)**: Folosește un sistem de etichete (tag-uri) precum `<h1>`, `<p>`, `<div>`, `<a>` pentru a descrie conținutul și semantica paginii.
+- **CSS (Cascading Style Sheets)**: Selectează elementele HTML și le aplică reguli vizuale (culori, fonturi, margini, aliniamente).
+- **Box Model**: Fiecare element HTML este reprezentat ca o casetă formată din: `Content` (conținutul brut), `Padding` (spațiul interior), `Border` (conturul) și `Margin` (spațiul exterior de separare).
+- **Layout Modern**: Folosește Flexbox (pentru alinieri unidimensionale) și Grid Layout (pentru structuri bidimensionale complexe).
+""",
+        "code": """
+<!-- Structură HTML cu CSS inline/embeded -->
+<div class="card">
+  <h2>Titlu Card</h2>
+  <p>Conținut descriptiv card...</p>
+</div>
+
+<style>
+.card {
+  padding: 20px;
+  border-radius: 8px;
+  background: #1e293b;
+  color: #f8fafc;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
+}
+.card:hover {
+  transform: translateY(-5px);
+}
+</style>
+"""
+    },
+    "jwt": {
+        "title": "🔑 JWT (JSON Web Tokens) & Autentificare",
+        "description": "JSON Web Token (JWT) este un standard deschis (RFC 7519) compact și autonom folosit pentru a transmite informații în siguranță între părți sub forma unui obiect JSON.",
+        "details": """
+JWT-urile sunt folosite pe scară largă în autentificarea de tip stateless pentru API-urile REST moderne.
+
+### Structura unui JWT (format din 3 părți separate prin puncte `.`):
+1. **Header**: Conține tipul de token (JWT) și algoritmul de criptare folosit (ex: HS256, RS256).
+2. **Payload (Informațiile)**: Conține datele efective (claims), cum ar fi ID-ul utilizatorului, numele acestuia și permisiunile, alături de data expirării.
+3. **Signature (Semnătura)**: Se obține prin combinarea Header-ului și Payload-ului criptate cu o cheie secretă de pe server, asigurând integritatea tokenului (dacă atacatorul modifică Payload-ul, semnătura devine invalidă).
+""",
+        "code": """
+# Utilizare teoretică PyJWT în Python
+import jwt
+import datetime
+
+SECRET_KEY = "cheie_secreta_super_dificil_de_ghicit"
+
+# Generare Token (pe server la Login)
+payload = {
+    "user_id": 42,
+    "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+}
+token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+print(f"Token JWT generat: {token}")
+"""
+    },
+    "virtualenv": {
+        "title": "📦 Medii Virtuale în Python (virtualenv & pip)",
+        "description": "Un mediu virtual este un director izolat complet care conține o instalare proprie a unui interpretor Python și o colecție independentă de pachete instalate.",
+        "details": """
+Mediile virtuale rezolvă problema conflictelor de versiuni ale bibliotecilor. De exemplu, dacă Proiectul A are nevoie de Django 3.2 și Proiectul B de Django 4.2, rularea lor pe aceeași instalare globală de Python ar cauza eșecuri.
+
+### Fluxul de lucru cu `venv`:
+1. **Creare**: `python3 -m venv .venv` (creează folderul `.venv` în proiect).
+2. **Activare**:
+   - macOS / Linux: `source .venv/bin/activate`
+   - Windows: `.venv\\Scripts\\activate`
+3. **Instalare**: `pip install streamlit` (pachetele se descarcă doar în interiorul `.venv`).
+4. **Salvare dependențe**: `pip freeze > requirements.txt` (permite colegilor să își instaleze aceleași versiuni prin `pip install -r requirements.txt`).
+""",
+        "code": """
+# Secvență completă de lucru în terminal
+$ cd /Users/mihaela/Desktop/P3
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+$ pip install -r requirements.txt
+$ streamlit run app.py
+"""
+    }
+}
+
+
+def _generate_dynamic_fallback(topic):
+    """Generează dinamic o pagină educațională custom în limba română pentru orice concept de programare."""
+    topic_title = topic.strip().capitalize()
+    
+    lines = []
+    lines.append(f"### 💡 Conceptul: **{topic_title}**\n")
+    lines.append(f"Subiectul **{topic_title}** reprezintă un concept, instrument sau tehnologie importantă în dezvoltarea software modernă și informatică.\n")
+    
+    lines.append("#### 🧱 Prezentare Generală:")
+    lines.append(f"- **Definiție**: În sens larg, **{topic_title}** servește ca element esențial în arhitectura software sau în logică algoritmică, având rolul de a îmbunătăți structura, optimizarea, performanța sau securitatea aplicațiilor.")
+    lines.append(f"- **Cum funcționează**: Operează prin abstractizarea proceselor subiacente, permițând dezvoltatorilor să scrie cod mai curat, modular și adaptabil la schimbări.")
+    lines.append("")
+    
+    lines.append("#### ⚙️ Piloni Principali de Aplicare:")
+    lines.append(f"1. **Eficiență și Scalabilitate**: Permite optimizarea utilizării resurselor fizice și logice, facilitând extinderea facilă a programelor.")
+    lines.append(f"2. **Mentenabilitate**: Prin utilizarea **{topic_title}**, codul devine mai ușor de testat, documentat și înțeles de către alți membri ai echipei de dezvoltare.")
+    lines.append(f"3. **Standardizare**: Reprezintă o bună practică recunoscută la nivel global în industrie, oferind soluții pre-testate pentru probleme frecvente.")
+    lines.append("")
+    
+    lines.append("#### 💻 Exemplu teoretic / Structură de cod:")
+    lines.append(f"În majoritatea limbajelor (de ex. Python), utilizarea conceptuală a **{topic_title}** se ghidează după structuri logice bine definite:")
+    lines.append(f"```python\n# Exemplu conceptual de utilizare / design pattern pentru {topic_title}\nclass Modern{topic_title.replace(' ', '')}:\n    def __init__(self, config=None):\n        self.config = config or {{}}\n        self.is_active = True\n        print(f\"[System] {topic_title} inițializat cu succes!\")\n\n    def executa_operatie(self, date):\n        if not self.is_active:\n            raise ValueError(\"Sistemul nu este activ!\")\n        # Procesare logică specifică\n        rezultat = f\"Date procesate prin {topic_title}: {{date}}\"\n        return rezultat\n```")
+    
+    answer_text = "\n".join(lines)
+    analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
+🤖 <b>[Modul Generativ Local]</b> Am detectat interesul tău pentru conceptul: <b>{topic_title}</b>. Deoarece nu este o funcție locală din fișierele tale, am generat un ghid educațional complet.
+</div>
+
+"""
+    return analysis_box + answer_text
+
+
 SYNTHESIS_DB = {
     "python": {
         "variable": {
@@ -2075,6 +2327,14 @@ def generate_follow_up_questions(question, answer, kb_match=None):
     
     # 1. Baza de cunoștințe
     if kb_match:
+        if kb_match.startswith("dynamic_fallback_"):
+            topic = kb_match.replace("dynamic_fallback_", "").replace("_", " ").title()
+            return [
+                f"Care este diferența dintre {topic} și alte concepte conexe?",
+                f"Cum se implementează {topic} în practică cu un exemplu complet?",
+                f"Care sunt bunele practici și greșelile frecvente în {topic}?"
+            ]
+
         follow_ups = {
             "ast": [
                 "Cum pot vizualiza arborele AST în tabul dedicat?",
@@ -2787,8 +3047,34 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
     if not chunk and subject:
         found = _text_search_chunks(subject, all_chunks)
         chunk = found[0] if found else None
-    # 5. Dacă e concept/variabilă (nu funcție), arătăm utilizările
+    # 5. Dacă e concept/variabilă (nu funcție) sau întrebare generală
     if not chunk:
+        # 1. Căutare în Dicționarul Universal Offline (Docker, React, etc.)
+        matched_key = None
+        for key in UNIVERSAL_DICT.keys():
+            if key in q or (subject and key in subject.lower()):
+                matched_key = key
+                break
+        if matched_key:
+            topic = UNIVERSAL_DICT[matched_key]
+            lines = []
+            lines.append(f"### 💡 {topic['title']}\n")
+            lines.append(topic["description"])
+            lines.append("")
+            lines.append(topic["details"])
+            if topic.get("code"):
+                lines.append("---")
+                lines.append("**💻 Fragment ilustrativ / Configurare:**")
+                lines.append(f"```python\n{topic['code'].strip()}\n```")
+            answer_text = "\n".join(lines)
+            analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
+🤖 <b>[Modul Educațional Universal]</b> Subiect detectat: <b>{topic['title']}</b>
+</div>
+
+"""
+            return analysis_box + answer_text, [], f"dynamic_fallback_{matched_key}"
+
+        # 2. Căutare utilizări în proiect dacă subiectul există
         if subject:
             usages = _analyze_variable_usage(subject, all_chunks)
             if usages:
@@ -2797,7 +3083,23 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
                     lines.append(f"- `{fname}` (`{fpath}`): `{usage_line.strip()[:90]}`")
                 return "\n".join(lines), [], None
             else:
-                return f"Nu am găsit nicio referință la `{subject}` în proiect. Verifică numele exact.", [], None
+                # 3. Fallback dinamic generativ pentru orice alt subiect
+                if len(subject) > 2:
+                    answer_text = _generate_dynamic_fallback(subject)
+                    clean_sub = subject.lower().replace(" ", "_")
+                    return answer_text, [], f"dynamic_fallback_{clean_sub}"
+
+        # 4. Fallback suplimentar pentru întrebări generale fără subiect extras clar
+        words = _re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', q)
+        NOISE = {"ce", "este", "e", "face", "cum", "unde", "care", "proiect", "cod", "aplicatie", "programare", "functia", "clasa"}
+        candidates = [w for w in words if w.lower() not in NOISE and len(w) > 2]
+        if candidates:
+            fallback_subject = candidates[-1]
+            answer_text = _generate_dynamic_fallback(fallback_subject)
+            clean_sub = fallback_subject.lower().replace(" ", "_")
+            return answer_text, [], f"dynamic_fallback_{clean_sub}"
+
+        # 5. Răspuns default extrem de detaliat (dacă tot nu se poate extrage nimic)
         if all_chunks and (is_explain or is_how or is_where or subject):
             chunk = all_chunks[0]
         else:
