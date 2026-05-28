@@ -2410,6 +2410,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
     is_stats   = any(w in q for w in ["statistici","sumar","overview","structura proiectului","câte funcții","cate functii","cate clase","rezumat"])
     is_file    = any(w in q for w in ["ce fisiere","ce fișiere","fisierele din proiect","care fisiere","lista fisierelor","ce cod am"])
     is_similar = any(w in q for w in ["similar","asemanator","care se aseamana","duplicat"])
+    is_project_summary = any(w in q for w in ["ce face proiectul", "ce face aplicatia", "ce face aplicația", "ce face codul meu", "despre ce e proiectul", "despre ce e codul", "rezumat proiect", "rezumatul proiectului", "ce face tot codul", "explică tot codul", "explica tot codul", "prezentare proiect"])
 
     # Ajustare prin clasificatorul semantic (hibrid)
     if intent_detected and max_score > 0.40:
@@ -2425,7 +2426,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
     # ── VERIFICĂM DACĂ BYPASĂM MODULUL EDUCAȚIONAL ───────────────────────────
     has_subject_in_code = subject and (subject in by_name or subject.lower() in by_name)
     has_file_in_q = any(fpath.lower().split("/")[-1] in q for fpath in by_file.keys())
-    bypass_educational = is_deps or is_stats or is_file or is_list or has_subject_in_code or has_file_in_q
+    bypass_educational = is_deps or is_stats or is_file or is_list or has_subject_in_code or has_file_in_q or is_project_summary
 
     # ── DETECTĂM GREETINGS SAU CORESPONDENȚĂ CHAT GENERALĂ ───────────────────
     GREETINGS = ["salut", "buna", "hey", "bună", "ciao", "hello", "hi", "servus", "ce mai faci", "buna ziua"]
@@ -2592,6 +2593,14 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
             target_file = fpath
             break
 
+    if target_file and subject:
+        subj_lower = subject.lower()
+        target_fname = target_file.lower().split("/")[-1]
+        is_part_of_file = subj_lower in target_fname or target_fname.startswith(subj_lower)
+        is_known_identifier = (subject in by_name) or (subj_lower in by_name)
+        if is_part_of_file or not is_known_identifier:
+            subject = None
+
     if target_file and not subject:
         # Utilizatorul întreabă despre un fișier întreg, nu o funcție/clasă anume
         cks = by_file[target_file]
@@ -2656,7 +2665,32 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
 """
             answer_text = analysis_box + answer_text
             
-        return answer_text, cks[:3], None
+    # ── EXPLICAȚIE PROIECT COMPLET (PROJECT SUMMARY) ─────────────────────────
+    if is_project_summary:
+        lines = []
+        lines.append("### 🛠️ Explicația de Ansamblu a Proiectului Tău (Code Explainer & Security Analyzer)\n")
+        lines.append("Întregul proiect este o aplicație **Streamlit** extrem de modernă, concepută pentru **analiza statică de cod, căutare semantică locală și audit de securitate offline**. Sistemul utilizează modelul local de deep learning **CodeBERT** (pe PyTorch) pentru a înțelege semnificația codului fără a apela API-uri externe.\n")
+        
+        lines.append("#### 📂 Structura și Rolul Modulelor:")
+        lines.append("- 🖥️ **`app.py` (Interfața Utilizator)**: Reprezintă panoul de control central. Acesta configurează designul vizual premium (CSS personalizat), administrează starea sesiunilor Streamlit (`st.session_state`), desenează graficele interactive de Atenție (Plotly) și coordonează toate filele funcționale ale aplicației.")
+        lines.append("- ⚙️ **`code_parser.py` (Analizorul AST & Diagram Generator)**: Se ocupă de procesarea brută a codului. Dezarhivează fișierele ZIP, le filtrează și folosește modulul Python `ast` (Abstract Syntax Tree) pentru a identifica clasele și funcțiile. De asemenea, generează automat diagrame de dependență și secvență în format **Mermaid (UML)**.")
+        lines.append("- 🧠 **`vector_store.py` (Căutarea Semantică Hibridă)**: Este creierul matematic al proiectului. Încarcă modelul CodeBERT local pe CPU/MPS/GPU, generează vectori de embedding de 768 de dimensiuni pentru fiecare fragment de cod și creează un index vectorial **FAISS** local. Implementează, de asemenea, căutarea hibridă combinând CodeBERT cu un motor lexical exact **TF-IDF**.")
+        lines.append("- 🛡️ **`security_analyzer.py` (Auditul de Securitate)**: Reprezintă inspectorul de siguranță. Scanează fișierele Python cu un vizitator AST (`SecurityVisitor`) pentru a depista automat vulnerabilități critice (de tip SQL Injection, rulare de comenzi shell, secrete/parole hardcodate) și clasifică riscurile semantic.")
+        lines.append("")
+        
+        lines.append("#### 🔁 Cum Colaborează Aceste Componente:")
+        lines.append("1. **Încărcare**: Încarci o arhivă ZIP cu cod în interfața Streamlit (`app.py`).")
+        lines.append("2. **Parsare**: `code_parser.py` descompune fișierele în fragmente (chunk-uri) logice și extrage metadate AST (parametri, importuri, apeluri).")
+        lines.append("3. **Indexare**: `vector_store.py` convertește aceste fragmente în vectori și le indexează în FAISS + TF-IDF.")
+        lines.append("4. **Interacțiune**: Când pui o întrebare, chatbot-ul folosește CodeBERT pentru a-ți înțelege intenția și a-ți căuta exact răspunsurile, în timp ce `security_analyzer.py` validează calitatea codului din punct de vedere al securității.")
+        
+        answer_text = "\n".join(lines)
+        analysis_box = """<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
+🤖 <b>[Prezentare de Ansamblu Proiect]</b> Am generat un rezumat complet al funcționalității întregului cod din codebase.
+</div>
+
+"""
+        return analysis_box + answer_text, [], None
 
     # ── STATISTICI / OVERVIEW ────────────────────────────────────────────────
     if is_stats:
