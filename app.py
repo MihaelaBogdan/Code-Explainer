@@ -2446,7 +2446,7 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
         lines.append("- Întreabă-mă cum funcționează variabilele, funcțiile, clasele, buclele sau listele în **Python, Java, C++, JavaScript, Rust, Go sau C#** (ex: *\"cum declar o variabilă în java\"*, *\"cum fac un loop în C++\"*).")
         lines.append("")
         lines.append("Cu ce începem astăzi? Pune-mi orice întrebare legată de cod sau concepte informatice!")
-        return "\n".join(lines), []
+        return "\n".join(lines), [], None
 
     # ── DETECTĂM SEMANTIC SUBIECTE DIN BAZA DE CUNOȘTINȚE GENERALĂ ──────────
     if not bypass_educational and indexer is not None:
