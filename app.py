@@ -3173,11 +3173,11 @@ else:
                             name = chunk.get("name", "modul_global")
                             fpath = chunk.get("file_path", "?").split("/")[-1]
                             h_text = f"""<b>[{idx+1}] {name}</b><br>
-Fișier: <code>{fpath}</code><br>
-Tip: {type_map.get(chunk['type'], 'Modul')}<br>
-Potrivire Hibridă: <b>{score:.1%}</b><br>
-• Semantică (CodeBERT): {chunk.get('semantic_score', 0.0):.1%}<br>
-• Lexicală (TF-IDF): {chunk.get('lexical_score', 0.0):.1%}"""
+                            Fișier: <code>{fpath}</code><br>
+                            Tip: {type_map.get(chunk['type'], 'Modul')}<br>
+                            Potrivire Hibridă: <b>{score:.1%}</b><br>
+                            • Semantică (CodeBERT): {chunk.get('semantic_score', 0.0):.1%}<br>
+                            • Lexicală (TF-IDF): {chunk.get('lexical_score', 0.0):.1%}"""
                             hover_texts.append(h_text)
                             
                             # Culori dinamice bazate pe relevanță
@@ -3270,12 +3270,10 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
                                 <h4 style="margin: 0; color: #38bdf8;">[{idx+1}] Fișier: <code>{chunk['file_path']}</code></h4>
                                 <span style="font-size: 0.9em; font-weight: bold; color: {gauge_color};">Potrivire: {confidence_pct}%</span>
                             </div>
-                            
                             <!-- Gauge indicator bar -->
                             <div style="width: 100%; background: #1e293b; border-radius: 4px; height: 6px; margin-bottom: 12px;">
                                 <div style="width: {confidence_pct}%; background: {gauge_color}; height: 6px; border-radius: 4px;"></div>
                             </div>
-                            
                             <div style="margin: 10px 0; display: flex; gap: 8px;">
                                 <span class="custom-badge {badge_color}"><b>Tip:</b> {chunk_type_label}</span>
                                 <span class="custom-badge custom-badge-blue"><b>Interval:</b> {lines_label}</span>
