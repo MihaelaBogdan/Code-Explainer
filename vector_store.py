@@ -33,7 +33,7 @@ class CodeBERTIndexer:
         if self.model is None:
             # Descarcă/încarcă modelul specificat de la Hugging Face
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModel.from_pretrained(self.model_name)
+            self.model = AutoModel.from_pretrained(self.model_name, attn_implementation="eager")
             self.model.to(DEVICE)
             self.model.eval() # Punem modelul în modul de evaluare (fără dropout)
 
