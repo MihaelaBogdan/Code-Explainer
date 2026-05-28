@@ -180,7 +180,89 @@ def get_all_embeddings(indexer):
         embeddings[i] = indexer.index.reconstruct(i)
     return embeddings
 
-def find_duplicates(embeddings, chunks, threshold=0.88):
+def generate_real_duplicate_refactoring(c1, c2):
+    import difflib
+    
+    code1 = c1.get("content", "")
+    code2 = c2.get("content", "")
+    n1 = c1.get("name", "func_a")
+    n2 = c2.get("name", "func_b")
+    args1 = c1.get("args", [])
+    args2 = c2.get("args", [])
+    
+    lines1 = code1.splitlines()
+    lines2 = code2.splitlines()
+    
+    matcher = difflib.SequenceMatcher(None, lines1, lines2)
+    matching_blocks = matcher.get_matching_blocks()
+    
+    best_block = None
+    max_len = 0
+    for block in matching_blocks:
+        if block.size > max_len:
+            sub_lines = lines1[block.a : block.a + block.size]
+            non_trivial_count = sum(1 for line in sub_lines if line.strip() and not line.strip().startswith("#") and "def " not in line)
+            if non_trivial_count > max_len:
+                max_len = non_trivial_count
+                best_block = block
+                
+    if best_block and max_len >= 2:
+        common_lines = lines1[best_block.a : best_block.a + best_block.size]
+        
+        # Curățăm indentarea pentru corpul comun
+        if common_lines:
+            non_empty_indents = [len(line) - len(line.lstrip()) for line in common_lines if line.strip()]
+            min_indent = min(non_empty_indents) if non_empty_indents else 0
+            cleaned_common_lines = []
+            for line in common_lines:
+                if line.strip():
+                    cleaned_common_lines.append("    " + line[min_indent:])
+                else:
+                    cleaned_common_lines.append("")
+            shared_body = "\n".join(cleaned_common_lines)
+        else:
+            shared_body = "    pass"
+            
+        shared_args = sorted(list(set(args1 + args2)))
+        shared_args_str = ", ".join(shared_args)
+        
+        shared_func = f"def _shared_logic({shared_args_str}):\n"
+        shared_func += f"    \x22\x22\x22Logica comună extrasă automat pentru a evita duplicarea între {n1} și {n2}.\x22\x22\x22\n"
+        shared_func += shared_body
+        
+        ref_lines1 = lines1[:best_block.a]
+        orig_indent = lines1[best_block.a][:len(lines1[best_block.a]) - len(lines1[best_block.a].lstrip())] if lines1[best_block.a].strip() else "    "
+        call_args_1 = ", ".join(args1) if args1 else shared_args_str
+        call_args_2 = ", ".join(args2) if args2 else shared_args_str
+        
+        ref_lines1.append(f"{orig_indent}return _shared_logic({call_args_1})")
+        ref_lines1 += lines1[best_block.a + best_block.size:]
+        refactored_code_1 = "\n".join(ref_lines1)
+        
+        ref_lines2 = lines2[:best_block.b]
+        ref_lines2.append(f"{orig_indent}return _shared_logic({call_args_2})")
+        ref_lines2 += lines2[best_block.b + best_block.size:]
+        refactored_code_2 = "\n".join(ref_lines2)
+        
+        return shared_func, refactored_code_1, refactored_code_2
+        
+    shared_args_str = ", ".join(sorted(list(set(args1 + args2))))
+    shared_func = f"def _shared_logic({shared_args_str}):\n"
+    shared_func += f"    \x22\x22\x22Logica comună extrasă din {n1} și {n2}.\x22\x22\x22\n"
+    
+    common_set = set(l.strip() for l in lines1 if l.strip() and not l.strip().startswith("#"))
+    common_lines = [l for l in lines2 if l.strip() in common_set and "def " not in l]
+    if len(common_lines) >= 2:
+        shared_func += "\n".join("    " + l.strip() for l in common_lines[:15])
+    else:
+        trimmed_body = [l for l in lines1 if "def " not in l and not l.strip().startswith('\x22\x22\x22')]
+        shared_func += "\n".join(trimmed_body[:10])
+        
+    refactored_code_1 = f"def {n1}({', '.join(args1)}):\n    return _shared_logic({', '.join(args1) if args1 else shared_args_str})"
+    refactored_code_2 = f"def {n2}({', '.join(args2)}):\n    return _shared_logic({', '.join(args2) if args2 else shared_args_str})"
+    
+    return shared_func, refactored_code_1, refactored_code_2
+
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9
     normalized = (embeddings / norms).astype('float32')
     sim_matrix = np.dot(normalized, normalized.T)
@@ -3416,24 +3498,23 @@ else:
                                 st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>❌ {c2.get('name','?')}</span> — `{c2['file_path']}`", unsafe_allow_html=True)
                                 st.code(c2["content"][:600], language="python")
                             # Sugestie de refactorizare directă
-                            n1 = c1.get('name', 'func_a')
-                            n2 = c2.get('name', 'func_b')
-                            args1 = ", ".join(c1.get("args", []))
-                            args2 = ", ".join(c2.get("args", []))
-                            st.markdown("<span style='color:#22c55e; font-weight:bold;'>✅ Cum refactorizezi — extrage logica comună:</span>", unsafe_allow_html=True)
-                            st.code(f"""\
-# 1. Crează o funcție utilitară care conține logica comună:
-def _shared_logic({args1 or args2 or 'data'}):
-    \"\"\"Logica comună extrasă din {n1} și {n2}.\"\"\"
-    ...   # mută aici blocurile de cod identice
-
-# 2. Înlocuiește {n1} cu apel la utilitar:
-def {n1}({args1 or 'data'}):
-    return _shared_logic({args1 or 'data'})
-
-# 3. Înlocuiește {n2} cu apel la utilitar:
-def {n2}({args2 or 'data'}):
-    return _shared_logic({args2 or 'data'})""", language="python")
+                            try:
+                                shared_code, ref_c1, ref_c2 = generate_real_duplicate_refactoring(c1, c2)
+                                st.markdown("<span style='color:#22c55e; font-weight:bold;'>✅ Cum refactorizezi — extrage logica comună în siguranță:</span>", unsafe_allow_html=True)
+                                
+                                st.markdown("⚙️ **1. Definește funcția utilitară cu logica extrasă:**")
+                                st.code(shared_code, language="python")
+                                
+                                st.markdown("🧱 **2. Înlocuiește implementările originale:**")
+                                col_ref1, col_ref2 = st.columns(2)
+                                with col_ref1:
+                                    st.markdown(f"**`{c1.get('name','?')}` refactorizat:**")
+                                    st.code(ref_c1, language="python")
+                                with col_ref2:
+                                    st.markdown(f"**`{c2.get('name','?')}` refactorizat:**")
+                                    st.code(ref_c2, language="python")
+                            except Exception as ref_err:
+                                st.warning(f"Nu s-a putut genera sugestia detaliată: {str(ref_err)}")
             else:
                 st.info("Apasă butonul de mai sus pentru a rula analiza.")
 
