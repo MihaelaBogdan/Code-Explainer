@@ -4305,8 +4305,8 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
                         for name_c, desc_c in concepts.items():
                             emb_c = indexer.get_embeddings([desc_c])[0]
                             sim = cosine_sim(code_emb, emb_c)
-                            # Scalăm similaritatea cosinus pentru un interval responsive și frumos (0.10 - 0.55 standard în CodeBERT)
-                            sim_pct = int(max(0, min(1.0, (sim - 0.05) / 0.45)) * 100)
+                            # Scalăm similaritatea cosinus pentru un interval realist și distribuit în funcție de plaja CodeBERT (0.45 - 0.85)
+                            sim_pct = int(max(0, min(1.0, (sim - 0.45) / 0.40)) * 100)
                             alignments[name_c] = (sim, sim_pct)
                             
                     st.write("---")
@@ -4359,7 +4359,8 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
                         with st.spinner("Se vectorizează conceptul selectat..."):
                             emb_custom = indexer.get_embeddings([custom_concept])[0]
                             sim_custom = cosine_sim(code_emb, emb_custom)
-                            pct_custom = int(max(0, min(1.0, (sim_custom - 0.05) / 0.45)) * 100)
+                            # Scalăm similaritatea cosinus pentru un interval realist și distribuit în funcție de plaja CodeBERT (0.45 - 0.85)
+                            pct_custom = int(max(0, min(1.0, (sim_custom - 0.45) / 0.40)) * 100)
                             
                         col_res1, col_res2 = st.columns([1, 4])
                         with col_res1:
