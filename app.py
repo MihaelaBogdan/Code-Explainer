@@ -3364,10 +3364,8 @@ Potrivire Hibridă: <b>{score:.1%}</b><br>
                             hoverinfo="text",
                             text=hover,
                             colorbar=dict(
-                                title="Intensitate",
-                                titleside="right",
+                                title=dict(text="Intensitate", side="right", font=dict(color="#c9d1d9")),
                                 tickfont=dict(color="#c9d1d9"),
-                                titlefont=dict(color="#c9d1d9"),
                             ),
                             zmin=0, zmax=float(att_matrix.max()),
                         ))
