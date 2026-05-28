@@ -1594,6 +1594,43 @@ def suma_iterativa(n):
 }
 
 
+# Programmatically inject high-precision Transformer semantic anchors for CodeBERT matching
+ANCHORS_MAP = {
+    "ast": ["ast", "abstract syntax tree", "arbore de sintaxa abstracta", "sintaxa abstracta", "ast parse", "visitor ast"],
+    "attention": ["self attention", "attention formula", "query key value", "capete de atentie", "mecanismul de atentie", "softmax qk"],
+    "streamlit_state": ["session state", "st.session_state", "streamlit state", "pastrare stare", "starea sesiunii"],
+    "database_normalization": ["normalizare", "forma normala", "1nf", "2nf", "3nf", "baza de date normalizare", "functional dependency"],
+    "acid": ["acid", "tranzactii sql", "atomicitate", "consistenta", "izolare", "durabilitate", "acid transaction"],
+    "sql_injection": ["sql injection", "injectie sql", "sqli", "prepared statements", "securitate sql"],
+    "java_oop": ["java oop", "oop java", "clase java", "polimorfism java", "incapsulare java", "mostenire java"],
+    "js_async": ["javascript async", "async await", "promises js", "event loop", "javascript promises", "asincron js"],
+    "cpp_memory": ["cpp memory", "pointeri cpp", "raii", "unique_ptr", "delete new cpp", "gestiune memorie c++"],
+    "rust_safety": ["rust ownership", "borrow checker", "lifetimes rust", "siguranta memorie rust", "referinte rust"],
+    "go_concurrency": ["go concurrency", "goroutines", "go channels", "concurenta go", "buffered channel"],
+    "csharp_dotnet": ["c# dotnet", "linq", "generics c#", "garbage collection clr", "delegat c#"],
+    "web_layout": ["css flexbox", "css grid", "layout css", "responsive grid", "flexbox vs grid"],
+    "recursion": ["recursivitate", "recursie", "recursion", "functie recursiva", "factorial recursiv"],
+    "oop_principles": ["principii oop", "mostenire polimorfism", "incapsulare abstractizare", "principii programare orientata pe obiecte"],
+    "stack_ds": ["stiva", "stack ds", "lifo", "operatii stiva", "push pop stack"],
+    "queue_ds": ["coada", "queue ds", "fifo", "enqueue dequeue", "operatii coada"],
+    "tree_ds": ["arbore binar", "binary tree", "bst", "avl tree", "parcurgere arbore"],
+    "graph_ds": ["graf", "graph ds", "dijkstra", "noduri muchii graf", "lista adiacenta"],
+    "solid_principles": ["principii solid", "solid design", "single responsibility", "liskov", "dependency inversion"],
+    "singleton_pattern": ["singleton", "design pattern singleton", "instanta unica singleton", "singleton class"],
+    "git_vcs": ["git commit", "git branch", "git rebase", "vcs git", "merge conflict git"],
+    "json_format": ["json format", "parse json", "javascript object notation", "serializare json"],
+    "rest_api": ["rest api", "endpoint-uri http", "http methods get post", "stateless api"],
+    "sql_nosql": ["sql vs nosql", "mongodb vs postgresql", "baze de date relationale", "nosql relationale"],
+    "db_indexing": ["indexare db", "database index", "b-tree index", "explain index query"],
+    "complexity_big_o": ["big o", "complexitate timp", "complexitate spatiu", "notația big o", "o log n"],
+    "recursion_iteration": ["recursivitate vs iterare", "recursiv vs iterativ", "tail call optimization"]
+}
+
+for k, anchors in ANCHORS_MAP.items():
+    if k in KNOWLEDGE_BASE:
+        KNOWLEDGE_BASE[k]["anchors"] = anchors
+
+
 UNIVERSAL_DICT = {
     "docker": {
         "title": "🐳 Docker & Containerizarea Modernă",
@@ -2783,33 +2820,56 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
 """
                 return analysis_box + answer_text, [], None
             
-            # 2. Verificare prin modelul Transformer cu Normalizare de Abatere Medie (dacă nu s-a găsit prin keywords)
+            best_anchor = ""
+            
+            # 2. Verificare de înaltă precizie prin modelul Transformer BERT folosind ancore semantice multi-vector
             if not kb_match:
                 q_emb = indexer.get_embeddings([question])[0]
-                
                 kb_keys = list(KNOWLEDGE_BASE.keys())
-                kb_queries = [KNOWLEDGE_BASE[k]["query"] for k in kb_keys]
-                kb_embs = indexer.get_embeddings(kb_queries)
+                
+                # Încărcăm / Cache-uim embeddings pentru ancorele din KNOWLEDGE_BASE în indexer
+                if not hasattr(indexer, "kb_anchor_embeddings") or not indexer.kb_anchor_embeddings:
+                    indexer.kb_anchor_embeddings = {}
+                    all_anchors = []
+                    anchor_keys = []
+                    for key in kb_keys:
+                        anchors = KNOWLEDGE_BASE[key].get("anchors", [KNOWLEDGE_BASE[key]["title"]])
+                        for anchor in anchors:
+                            all_anchors.append(anchor)
+                            anchor_keys.append((key, anchor))
+                    # Generăm vectorii de embedding într-un singur batch rapid
+                    embs = indexer.get_embeddings(all_anchors)
+                    for idx, (key, anchor) in enumerate(anchor_keys):
+                        indexer.kb_anchor_embeddings.setdefault(key, []).append((anchor, embs[idx]))
                 
                 scores = []
-                for idx, key in enumerate(kb_keys):
-                    sim = cosine_sim(q_emb, kb_embs[idx])
-                    scores.append(sim)
-                    
-                mean_score = sum(scores) / len(scores)
-                relative_scores = [s - mean_score for s in scores]
+                best_anchors = []
+                for key in kb_keys:
+                    anchor_data = indexer.kb_anchor_embeddings.get(key, [])
+                    max_sim = -1.0
+                    best_anc = ""
+                    for anchor, emb in anchor_data:
+                        sim = cosine_sim(q_emb, emb)
+                        if sim > max_sim:
+                            max_sim = sim
+                            best_anc = anchor
+                    scores.append(max_sim)
+                    best_anchors.append(best_anc)
                 
-                best_idx = int(np.argmax(relative_scores))
-                # Prăguri stricte: cel mai bun scor trebuie să fie cu mult peste media celorlalte
-                if relative_scores[best_idx] > 0.045 and scores[best_idx] > 0.65:
+                best_idx = int(np.argmax(scores))
+                best_score = scores[best_idx]
+                
+                if best_score > 0.65:
                     kb_match = kb_keys[best_idx]
-                    kb_max_score = scores[best_idx]
+                    kb_max_score = best_score
+                    best_anchor = best_anchors[best_idx]
+                    is_fallback_match = False
                 else:
-                    # Fallback moderat pe baza celui mai mare scor absolut peste 0.52
-                    best_abs_idx = int(np.argmax(scores))
-                    if scores[best_abs_idx] > 0.52:
-                        kb_match = kb_keys[best_abs_idx]
-                        kb_max_score = scores[best_abs_idx]
+                    # Fallback moderat pe baza scorului maxim absolut peste 0.50
+                    if best_score > 0.50:
+                        kb_match = kb_keys[best_idx]
+                        kb_max_score = best_score
+                        best_anchor = best_anchors[best_idx]
                         is_fallback_match = True
                         
             if kb_match:
@@ -2829,13 +2889,15 @@ def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
                 answer_text = "\n".join(lines)
                 if is_fallback_match:
                     analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(245, 158, 11, 0.08); border-left: 3px solid #f59e0b; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Modul Asistență Concepte]</b> Nu am găsit o potrivire exactă, dar cred că te-ar ajuta conceptul conex: <b>{topic['title']}</b> (scor încredere: <code>{kb_max_score:.3f}</code>)
+🤖 <b>[Aliniere Semantică Transformer BERT]</b> Conceptul recomandat este: <b>{topic['title']}</b> (scor similaritate: <code>{kb_max_score:.3f}</code>) <br>
+🎯 <i>Ancoră semântică CodeBERT:</i> <code>"{best_anchor or topic['title']}"</code>
 </div>
 
 """
                 else:
-                    analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Modul Educațional Transformer]</b> Subiect detectat: <b>{topic['title']}</b> (similaritate: <code>{kb_max_score:.3f}</code>)
+                    analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(99, 102, 241, 0.08); border-left: 3px solid #6366f1; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
+🤖 <b>[Aliniere Semantică Transformer BERT]</b> Subiect detectat: <b>{topic['title']}</b> (scor similaritate: <code>{kb_max_score:.3f}</code>) <br>
+🎯 <i>Ancoră semântică CodeBERT:</i> <code>"{best_anchor or topic['title']}"</code>
 </div>
 
 """
