@@ -719,47 +719,7 @@ def analyze_chunk_ast(code_str):
     return info
 
 
-def _extract_subject(question):
-    """Extrage identificatorul Python (funcție/clasă/variabilă) din întrebare."""
-    import re
-    q = question.strip()
 
-    # Cuvinte care NU sunt niciodată subiecte — interogative, verbe, prepoziții RO+EN
-    NOISE = {
-        "ce", "este", "e", "face", "sunt", "cum", "unde", "cine", "care", "cat",
-        "explica", "explică", "descrie", "listeaza", "listează", "enumera", "enumeră",
-        "functia", "funcția", "clasa", "clasa", "metoda", "variabila",
-        "parametri", "argumente", "primeste", "primește", "returneaza", "returnează",
-        "intoarce", "întoarce", "produce", "output", "input", "rezultat",
-        "foloseste", "folosește", "folosesc", "folosim", "folositi", "folosi", "apeleaza", "apelează", "cheama", "cheamă",
-        "rolul", "scopul", "modulul", "fisierul", "fișierul",
-        "a", "al", "ale", "de", "la", "in", "în", "din", "si", "și", "sau", "se",
-        "ca", "că", "cu", "pe", "prin", "pentru", "despre", "din", "avem", "are",
-        "the", "is", "are", "does", "do", "how", "what", "where", "who",
-        "which", "function", "class", "method", "variable", "about",
-        "erori", "exceptii", "excepții", "importuri", "dependente", "dependențe",
-        "librarii", "biblioteci", "module", "fisiere", "fișiere",
-        "găsesc", "găsește", "găsim", "afiseaza", "afișează", "arată", "arata",
-        "da", "dă", "da-mi", "dă-mi", "vreau", "pot", "putem", "scrie", "scriem"
-    }
-
-    words = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', q)
-    candidates = [w for w in words if w.lower() not in NOISE and len(w) > 1]
-
-    if not candidates:
-        return ""
-
-    # Scor: snake_case (+3), CamelCase (+2), lungime > 5 (+1), apare ultimul (+1)
-    def score(w):
-        s = 0
-        if "_" in w: s += 3          # snake_case = Python identifier clar
-        elif w[0].isupper(): s += 2  # CamelCase = clasă
-        if len(w) > 5: s += 1
-        return s
-
-    # Sortăm descrescător după scor, dar preferăm ultimul cuvânt la egalitate
-    scored = sorted(enumerate(candidates), key=lambda x: (score(x[1]), x[0]), reverse=True)
-    return scored[0][1] if scored else ""
 
 
 def _text_search_chunks(term, all_chunks, max_results=5):
@@ -2356,1012 +2316,6 @@ async function fileOperations() {
 }
 
 
-def generate_follow_up_questions(question, answer, kb_match=None):
-    """
-    Generează dinamic 3 întrebări de follow-up relevante bazate pe contextul întrebării/răspunsului.
-    """
-    q = question.lower()
-    
-    # 1. Baza de cunoștințe
-    if kb_match:
-        if kb_match.startswith("dynamic_fallback_"):
-            topic = kb_match.replace("dynamic_fallback_", "").replace("_", " ").title()
-            return [
-                f"Care este diferența dintre {topic} și alte concepte conexe?",
-                f"Cum se implementează {topic} în practică cu un exemplu complet?",
-                f"Care sunt bunele practici și greșelile frecvente în {topic}?"
-            ]
-
-        follow_ups = {
-            "ast": [
-                "Cum pot vizualiza arborele AST în tabul dedicat?",
-                "Care este diferența dintre un NodeVisitor și un NodeTransformer?",
-                "Cum detectează AST variabilele nefolosite?"
-            ],
-            "attention": [
-                "Cum influențează capetele multiple (Multi-Head) auto-atenția?",
-                "Cum pot interpreta intensitatea din Heatmap-ul de atenție?",
-                "Ce rol are vectorul Query (Q) în formulă?"
-            ],
-            "streamlit_state": [
-                "Cum folosesc st.session_state pentru a stoca date din formulare?",
-                "Când ar trebui să apelez st.rerun() explicit?",
-                "Cum pot curăța memoria cache din Streamlit?"
-            ],
-            "database_normalization": [
-                "Ce este forma normală Boyce-Codd (BCNF)?",
-                "Cum sparg un tabel în 3NF fără pierdere de date?",
-                "Ce este o cheie primară compusă?"
-            ],
-            "acid": [
-                "Ce înseamnă Dirty Read și cum se evită în tranzacții?",
-                "Cum diferă Isolation Level-ul într-o bază de date?",
-                "Cum previne Rollback-ul pierderea de date?"
-            ],
-            "sql_injection": [
-                "Cum folosesc SQLAlchemy pentru prepared statements?",
-                "Cum curăț inputurile primite în câmpurile de text?",
-                "Ce este un blind SQL injection?"
-            ],
-            "java_oop": [
-                "Care este diferența dintre o interfață și o clasă abstractă în Java?",
-                "Cum funcționează supraîncărcarea (overloading) vs suprascrierea (overriding)?",
-                "Ce este modificatorul de acces 'protected'?"
-            ],
-            "js_async": [
-                "Ce este un Promise.all() și cum optimizează apelurile?",
-                "Cum funcționează microtask queue în Event Loop?",
-                "Care este diferența dintre Promise și Callback?"
-            ],
-            "cpp_memory": [
-                "Care este diferența dintre unique_ptr și shared_ptr?",
-                "Ce este un memory leak și cum îl pot depista?",
-                "Cum funcționează destructorul virtual în C++?"
-            ],
-            "rust_safety": [
-                "Ce sunt Lifetimes în Rust și când sunt necesare?",
-                "Cum funcționează conceptconceptul de mutabilitate în Rust?",
-                "Ce este tipul special Option<T>?"
-            ],
-            "go_concurrency": [
-                "Ce este un buffered channel în Go?",
-                "Cum folosesc sync.WaitGroup pentru sincronizare?",
-                "Ce se întâmplă în caz de Deadlock într-un canal?"
-            ],
-            "csharp_dotnet": [
-                "Cum funcționează delegatul Func<> și Action<> în C#?",
-                "Care este diferența dintre IQueryable și IEnumerable în LINQ?",
-                "Ce este Garbage Collection-ul în CLR?"
-            ],
-            "web_layout": [
-                "Când ar trebui să folosesc CSS Grid în loc de Flexbox?",
-                "Cum fac un grid responsiv cu repeat(auto-fit, minmax)?",
-                "Ce proprietăți Flexbox aliniază elementele pe axa transversală?"
-            ],
-            "recursion": [
-                "Care este diferența de performanță dintre recursivitate și iterare?",
-                "Cum previn eroarea de Stack Overflow în Python?",
-                "Cum implementez căutarea binară recursiv?"
-            ],
-            "oop_principles": [
-                "Ce înseamnă compoziția în loc de moștenire (Composition over Inheritance)?",
-                "Ce este polimorfismul la compilare?",
-                "Cum se aplică abstractizarea în design-ul bazelor de date?"
-            ],
-            "stack_ds": [
-                "Cum pot implementa o stivă folosind o listă înlănțuită?",
-                "Care este complexitatea timp O(1) pentru push și pop?",
-                "Cum folosește compilatorul stiva în recursivitate?"
-            ],
-            "queue_ds": [
-                "Care este diferența dintre coada simplă și o coadă de priorități?",
-                "Cum funcționează o coadă circulară (Circular Queue)?",
-                "Cum folosesc deque din Python pentru cozi?"
-            ],
-            "tree_ds": [
-                "Cum se face parcurgerea în inordine (In-order traversal) a unui BST?",
-                "Ce este un arbore AVL și cum se auto-echilibrează?",
-                "Care este diferența dintre BFS și DFS pentru arbori?"
-            ],
-            "graph_ds": [
-                "Cum funcționează algoritmul lui Dijkstra pentru drumul minim?",
-                "Care sunt diferențele dintre matricea și lista de adiacență?",
-                "Cum detectez ciclurile într-un graf?"
-            ],
-            "solid_principles": [
-                "Ce este Liskov Substitution Principle (LSP)?",
-                "Cum aplic Dependency Inversion în proiectul meu?",
-                "Ce înseamnă Interface Segregation?"
-            ],
-            "singleton_pattern": [
-                "De ce este Singleton considerat uneori un anti-pattern?",
-                "Cum creez un Singleton thread-safe în Python?",
-                "Cum folosesc Singleton pentru conexiunea la baza de date?"
-            ],
-            "git_vcs": [
-                "Cum rezolv conflictele de îmbinare (merge conflicts) în Git?",
-                "Care este diferența dintre git merge și git rebase?",
-                "Cum anulez ultimul commit local fără a pierde modificările?"
-            ],
-            "json_format": [
-                "Cum convertesc o stuctură de date Python în JSON?",
-                "Care este diferența dintre JSON și XML?",
-                "Cum parsez JSON asincron în JavaScript?"
-            ],
-            "rest_api": [
-                "Ce este un RESTful API stateless?",
-                "Care este rolul token-urilor JWT în securizarea API-ului?",
-                "Ce înseamnă codul de răspuns HTTP 429?"
-            ],
-            "sql_nosql": [
-                "Când este recomandat să folosesc MongoDB în loc de PostgreSQL?",
-                "Ce înseamnă consistența eventuală (Eventual Consistency) în NoSQL?",
-                "Cum funcționează scalabilitatea orizontală?"
-            ],
-            "db_indexing": [
-                "De ce scrierea devine mai lentă când adăugăm indecși?",
-                "Ce este un index compus pe mai multe coloane?",
-                "Cum pot vedea dacă interogarea mea folosește un index (EXPLAIN)?"
-            ],
-            "complexity_big_o": [
-                "De ce este $O(N \\log N)$ mai bun decât $O(N^2)$?",
-                "Cum calculez complexitatea spațiu a unui algoritm?",
-                "Ce complexitate are căutarea binară?"
-            ],
-            "recursion_iteration": [
-                "Cum se face optimizarea apelului pe coadă (Tail Call Optimization)?",
-                "Care este complexitatea memoriei în recursivitatea pe stivă?",
-                "Când ar trebui să prefer buclele standard?"
-            ]
-        }
-        if kb_match in follow_ups:
-            return follow_ups[kb_match]
-            
-    # 2. Întrebări legate de fișiere specifice
-    for f in ["app.py", "code_parser.py", "vector_store.py", "security_analyzer.py"]:
-        if f in q:
-            if "app.py" in f:
-                return [
-                    "Ce componente UI Streamlit se regăsesc în app.py?",
-                    "Cum se gestionează stările session_state în app.py?",
-                    "Ce biblioteci se folosesc pentru stilizarea interfeței?"
-                ]
-            elif "code_parser.py" in f:
-                return [
-                    "Cum extrage code_parser.py clasele și funcțiile prin AST?",
-                    "Ce structură are codul pentru generarea diagramelor Mermaid?",
-                    "Cum sunt filtrate fișierele de cod acceptate?"
-                ]
-            elif "vector_store.py" in f:
-                return [
-                    "Cum funcționează indexul FAISS pentru stocarea embeddings?",
-                    "Cum funcționează căutarea hibridă (lexicală + semantică)?",
-                    "Cum se vectorisează batch-urile de cod pe Apple Silicon (MPS)?"
-                ]
-            elif "security_analyzer.py" in f:
-                return [
-                    "Ce reguli de securitate scanează security_analyzer.py?",
-                    "Cum detectează similaritatea CodeBERT secretele hardcodate?",
-                    "Cum se pot integra reguli de securitate personalizate?"
-                ]
-                
-    # 3. Întrebări legate de importuri/statistici
-    if any(w in q for w in ["import", "depend", "pachet", "librar"]):
-        return [
-            "Ce librării externe folosește modulul vector_store.py?",
-            "Cum adaug o bibliotecă nouă în requirements.txt?",
-            "De ce importăm ast în mod explicit?"
-        ]
-        
-    if any(w in q for w in ["statist", "sumar", "cate", "câte", "linii"]):
-        return [
-            "Care este cel mai mare fișier din proiect și de ce?",
-            "Câte funcții din codebase sunt documentate cu docstrings?",
-            "Cum influențează dimensiunea codului performanța vectorizării?"
-        ]
-
-    # 4. Fallback general bazat pe termeni detectați
-    if any(w in q for w in ["variabil", "declar", "atribu"]):
-        return [
-            "Cum declar variabile în JavaScript vs Java?",
-            "Ce este tipizarea dinamică în Python?",
-            "Ce este scope-ul unei variabile (local vs global)?"
-        ]
-    if any(w in q for w in ["functi", "funcți", "metod"]):
-        return [
-            "Cum definesc o funcție recursivă?",
-            "Ce sunt argumentele implicite (default arguments)?",
-            "Cum returnez mai multe valori dintr-o funcție Python?"
-        ]
-    if any(w in q for w in ["clas", "obiect", "construct"]):
-        return [
-            "Ce rol are constructorul __init__ în Python?",
-            "Ce este clasa de bază Object în Java?",
-            "Cum implementez moștenirea multiplă în Python?"
-        ]
-        
-    # Fallback implicit universal
-    return [
-        "Care sunt principiile SOLID de design software?",
-        "Cum funcționează recursivitatea în programare?",
-        "Ce diferențe sunt între bazele de date SQL și NoSQL?"
-    ]
-
-
-def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
-    """Răspuns complet bazat pe KB pre-calculat + FAISS + AST + clasificare semantică prin CodeBERT."""
-    import re as _re
-    q   = question.lower().strip()
-    kb  = kb or {}
-    by_name   = kb.get("by_name", {})
-    called_by = kb.get("called_by", {})
-    call_graph= kb.get("call_graph", {})
-    by_file   = kb.get("by_file", {})
-    stats     = kb.get("stats", {})
-    all_imports = kb.get("all_imports", {})
-
-    subject = _extract_subject(question)
-
-    # ── GENERATORUL DINAMIC DE COD ȘI SINTEZĂ (DYN-SYNTHESIS) ───────────────
-    detected_lang = None
-    detected_concept = None
-    
-    # 1. Detecție limbaj
-    LANG_KEYWORDS = {
-        "python": ["python", "py"],
-        "java": ["java"],
-        "cpp": ["c++", "cpp", "c plus plus"],
-        "javascript": ["javascript", "js", "node.js", "node"]
-    }
-    for lang, kws in LANG_KEYWORDS.items():
-        if any(kw in q for kw in kws):
-            detected_lang = lang
-            break
-            
-    # 2. Detecție concept de programare
-    CONCEPT_KEYWORDS = {
-        "variable": ["variabila", "variabile", "declar", "atribuire", "variabilei", "constanta", "constante"],
-        "function": ["functie", "funcție", "functii", "funcții", "metoda", "metodă", "metode"],
-        "class": ["clasa", "clasă", "clase", "obiect", "constructor", "init"],
-        "loop": ["loop", "bucla", "buclă", "bucle", "for", "while"],
-        "condition": ["conditie", "condiție", "if", "else", "elif"],
-        "list": ["lista", "listă", "liste", "array", "vector"],
-        "file": ["fisier", "fișier", "fisiere", "fișiere", "open", "read", "write"]
-    }
-    for concept, kws in CONCEPT_KEYWORDS.items():
-        if any(kw in q for kw in kws):
-            detected_concept = concept
-            break
-            
-    if detected_concept:
-        if not detected_lang:
-            detected_lang = "python" # Default pe Python dacă nu s-a specificat un limbaj anume
-            
-        lang_data = SYNTHESIS_DB.get(detected_lang, {})
-        concept_data = lang_data.get(detected_concept)
-        
-        if concept_data:
-            lines = []
-            lines.append(f"### 💡 {concept_data['title']}\n")
-            lines.append(concept_data["desc"])
-            lines.append("")
-            lines.append("---")
-            lines.append(f"**💻 Exemplu complet de cod în {detected_lang.capitalize()}:**")
-            lines.append(f"```python\n{concept_data['code'].strip()}\n```")
-            
-            answer_text = "\n".join(lines)
-            analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Modul de Sinteză Cod]</b> Concept detectat: <b>{concept_data['title']}</b>
-</div>
-
-"""
-            answer_text = analysis_box + answer_text
-            return answer_text, [], None
-
-    # ── detecție intenție prin modelul Transformer (CodeBERT) ────────────────
-    intent_detected = None
-    max_score = 0.0
-    intent_scores = {}
-    
-    if indexer is not None:
-        try:
-            # Vectorizăm întrebarea
-            q_emb = indexer.get_embeddings([question])[0]
-            
-            # Definiție intenții pentru comparare semantică
-            INTENTS_DESC = {
-                "explain": "descrie sau explică ce face funcția clasa scopul funcționalitate rol",
-                "where": "unde se află definit localizare fișier linie cale path",
-                "args": "ce parametri argumente primește input variabile de intrare",
-                "returns": "ce returnează valoare întoarsă output return val",
-                "errors": "ce erori sau excepții aruncă ridică raise exception except error",
-                "callers": "cine apelează funcția cine o folosește clienți call graph",
-                "calls": "ce funcții apelează intern dependențe interioare sub-apeluri",
-                "similar": "funcții similare semantic cod asemănător duplicate"
-            }
-            
-            intent_keys = list(INTENTS_DESC.keys())
-            intent_queries = [INTENTS_DESC[k] for k in intent_keys]
-            intent_embs = indexer.get_embeddings(intent_queries)
-            
-            for idx, key in enumerate(intent_keys):
-                sim = cosine_sim(q_emb, intent_embs[idx])
-                intent_scores[key] = sim
-                if sim > max_score:
-                    max_score = sim
-                    intent_detected = key
-        except Exception as e:
-            pass
-
-    # Cuvinte-cheie ca fallback / hibridizare
-    is_explain = any(w in q for w in ["ce face","explică","explica","descrie","ce este","ce reprezintă","ce rol","pentru ce","ce e ","what does","explain"])
-    is_how     = any(w in q for w in ["cum funcționează","cum lucrează","cum","in ce mod","prin ce mecanism"])
-    is_where   = any(w in q for w in ["unde","in ce fisier","unde se afla","unde e definit","unde e declarat"])
-    is_callers = any(w in q for w in ["cine apeleaza","cine foloseste","unde e apelat","unde se foloseste","cine cheama"])
-    is_calls   = any(w in q for w in ["ce apeleaza","ce functii apeleaza","ce cheama","ce foloseste intern"])
-    is_args    = any(w in q for w in ["ce parametri","ce argumente","ce primeste","input","ce ia"])
-    is_returns = any(w in q for w in ["ce returneaza","ce intoarce","ce produce","output","ce da inapoi","ce rezultat"])
-    is_errors  = any(w in q for w in ["ce erori","ce exceptii","exception","eroare","raise","aruncă"])
-    is_deps    = any(w in q for w in ["importuri","dependente","librarii","module importate","ce importa","ce import"])
-    is_list    = any(w in q for w in ["listează","enumera","care sunt functiile","care sunt clasele","ce functii","ce clase","toate functiile","toate clasele","functii din","clasele din"])
-    is_stats   = any(w in q for w in ["statistici","sumar","overview","structura proiectului","câte funcții","cate functii","cate clase","rezumat"])
-    is_file    = any(w in q for w in ["ce fisiere","ce fișiere","fisierele din proiect","care fisiere","lista fisierelor","ce cod am"])
-    is_similar = any(w in q for w in ["similar","asemanator","care se aseamana","duplicat"])
-    is_project_summary = any(w in q for w in ["ce face proiectul", "ce face aplicatia", "ce face aplicația", "ce face codul meu", "despre ce e proiectul", "despre ce e codul", "rezumat proiect", "rezumatul proiectului", "ce face tot codul", "explică tot codul", "explica tot codul", "prezentare proiect"])
-
-    # Ajustare prin clasificatorul semantic (hibrid)
-    if intent_detected and max_score > 0.40:
-        if intent_detected == "explain": is_explain = True
-        elif intent_detected == "where": is_where = True
-        elif intent_detected == "args": is_args = True
-        elif intent_detected == "returns": is_returns = True
-        elif intent_detected == "errors": is_errors = True
-        elif intent_detected == "callers": is_callers = True
-        elif intent_detected == "calls": is_calls = True
-        elif intent_detected == "similar": is_similar = True
-
-    # ── VERIFICĂM DACĂ BYPASĂM MODULUL EDUCAȚIONAL ───────────────────────────
-    has_subject_in_code = subject and (subject in by_name or subject.lower() in by_name)
-    has_file_in_q = any(fpath.lower().split("/")[-1] in q for fpath in by_file.keys())
-    bypass_educational = is_deps or is_stats or is_file or is_list or has_subject_in_code or has_file_in_q or is_project_summary
-
-    # ── DETECTĂM GREETINGS SAU CORESPONDENȚĂ CHAT GENERALĂ ───────────────────
-    GREETINGS = ["salut", "buna", "hey", "bună", "ciao", "hello", "hi", "servus", "ce mai faci", "buna ziua"]
-    if any(w in q.split() for w in GREETINGS) or q in ("salut", "buna", "bună", "hei"):
-        lines = []
-        lines.append("### 🤖 Salut! Eu sunt asistentul tău local de programare.")
-        lines.append("Sunt proiectat să rulez **100% offline** utilizând arhitectura locală a modelului **Transformer (CodeBERT)**. Te pot ajutor cu o mulțime de lucruri:")
-        lines.append("")
-        lines.append("👉 **Analiza Codului Tău**:")
-        lines.append("- Întreabă-mă despre orice funcție, clasă sau fișier din proiect (ex: *\"ce face app.py\"*, *\"ce importuri am\"*).")
-        lines.append("")
-        lines.append("👉 **Lecții și Concepte Academice (Teorie & Exemple SQL/Python)**:")
-        lines.append("- **Baze de Date**: Normalizare SQL (**1NF, 2NF, 3NF**), Tranzacții **ACID**, securitate (**SQL Injection**), **Indexare database**, **SQL vs NoSQL**.")
-        lines.append("- **Teorie AI & Compilatoare**: Mecanismul de **Self-Attention** în Transformers, **AST** (Abstract Syntax Tree).")
-        lines.append("- **Structuri de Date & Algoritmi**: **Stivă (Stack)**, **Coadă (Queue)**, **Arbori (Tree)**, **Grafuri (Graph)**, **SOLID**, **Singleton**, **Big O**, **Recursivitate**, **Recursivitate vs Iterare**.")
-        lines.append("")
-        lines.append("👉 **Ghiduri de Sintaxă Multi-Limbaj (Sinteză Cod)**:")
-        lines.append("- Întreabă-mă cum funcționează variabilele, funcțiile, clasele, buclele sau listele în **Python, Java, C++, JavaScript, Rust, Go sau C#** (ex: *\"cum declar o variabilă în java\"*, *\"cum fac un loop în C++\"*).")
-        lines.append("")
-        lines.append("Cu ce începem astăzi? Pune-mi orice întrebare legată de cod sau concepte informatice!")
-        return "\n".join(lines), [], None
-
-    # ── DETECTĂM SEMANTIC SUBIECTE DIN BAZA DE CUNOȘTINȚE GENERALĂ ──────────
-    if not bypass_educational and indexer is not None:
-        kb_match = None
-        kb_max_score = 0.0
-        is_fallback_match = False
-        try:
-            # 1. Verificare prin cuvinte-cheie deterministe (Prioritate maximă)
-            TOPIC_KEYWORDS = {
-                "ast": ["ast", "syntax tree", "sintaxă abstractă", "sintaxa abstracta", "arbore de sintaxa", "arborele de sintaxă"],
-                "attention": ["attention", "atenție", "atentie", "qkv", "query key value", "self-attention", "auto-atenție", "auto-atentie"],
-                "streamlit_state": ["session state", "session_state", "starea sesiunii", "pastram starea", "st.session_state"],
-                "database_normalization": ["normalizare", "forma normală", "forma normala", "1nf", "2nf", "3nf", "dependență funcțională", "dependență tranzitivă"],
-                "acid": ["acid", "tranzacții", "tranzactii", "atomicitate", "consistență", "consistenta", "izolare", "durabilitate"],
-                "sql_injection": ["sql injection", "injecție sql", "injectie sql", "concatenare sql", "securitate sql"],
-                "java_oop": ["java", "oop", "orientat pe obiecte", "polimorfism", "încapsulare", "incapsulare", "abstractizare", "interfețe", "interfete"],
-                "js_async": ["javascript", "typescript", "async", "await", "promise", "callbacks", "event loop", "asincron"],
-                "cpp_memory": ["c++", "pointer", "referințe", "referinte", "malloc", "free", "new", "delete", "raii", "gestionarea memoriei", "smart pointer"],
-                "rust_safety": ["rust", "ownership", "borrow checker", "lifetimes", "siguranță memorie", "referințe rust"],
-                "go_concurrency": ["go ", "golang", "goroutine", "channels", "concurență go", "csp"],
-                "csharp_dotnet": ["c#", "dotnet", "linq", "generics", "clr", "delegat", "c sharp"],
-                "web_layout": ["flexbox", "css grid", "layout css", "responsive web", "machetare web", "machetare css", "flex grid"],
-                "recursion": ["recursivitate", "recursiv", "recursion", "recursivă", "recursiva", "auto-apelare"],
-                "oop_principles": ["principii oop", "principiile oop", "mostenire", "moștenire", "polimorfism", "încapsulare", "incapsulare", "abstractizare", "clase și obiecte", "clase si obiecte"],
-                "stack_ds": ["stivă", "stiva", "stack", "lifo", "push pop", "operatii stiva", "stive"],
-                "queue_ds": ["coadă", "coada", "queue", "fifo", "enqueue dequeue", "operatii coada", "cozi"],
-                "tree_ds": ["arbore", "tree", "arbori", "binary tree", "arbore binar", "bst", "frunze arbore"],
-                "graph_ds": ["graf", "graph", "grafuri", "noduri muchii", "lista de adiacenta", "drum minim", "ponderat"],
-                "solid_principles": ["solid", "principii solid", "principiile solid", "single responsibility", "liskov", "dependency inversion"],
-                "singleton_pattern": ["singleton", "pattern singleton", "design pattern singleton", "instanță unică", "instanta unica"],
-                "git_vcs": ["git", "commit", "branch", "merge", "push", "pull", "controlul versiunilor", "vcs"],
-                "json_format": ["json", "format json", "ce este json", "javascript object notation", "date json"],
-                "rest_api": ["rest api", "api rest", "http methods", "endpoint", "get post put delete", "coduri de stare http"],
-                "sql_nosql": ["sql vs nosql", "nosql", "baze de date relationale", "baze de date ne-relationale", "mongodb vs postgresql"],
-                "db_indexing": ["indexare", "index db", "indecși", "indecsi", "index baze de date", "b-tree", "idx"],
-                "complexity_big_o": ["big o", "complexitate timp", "complexitatea timp", "notația big o", "timp de executie", "eficienta algoritm"],
-                "recursion_iteration": ["recursivitate vs iterare", "iterare vs recursivitate", "recursiv vs iterativ", "suma_recursiva", "suma_iterativa"]
-            }
-            
-            # Detecție concepte multiple din KNOWLEDGE_BASE pentru comparații dinamice
-            matched_topics = []
-            for key, kw_list in TOPIC_KEYWORDS.items():
-                if any(kw in q for kw in kw_list):
-                    matched_topics.append(key)
-            
-            if len(matched_topics) == 1:
-                kb_match = matched_topics[0]
-                kb_max_score = 1.0
-            elif len(matched_topics) > 1:
-                # Comparație dinamică multiplă!
-                lines = []
-                lines.append("### 🔀 Analiză Comparativă Dinamică\n")
-                lines.append("Am detectat că întrebi despre mai multe concepte înrudite. Iată o analiză detaliată a acestora:")
-                lines.append("")
-                
-                for key in matched_topics:
-                    topic = KNOWLEDGE_BASE[key]
-                    lines.append(f"#### 💡 {topic['title']}")
-                    lines.append(topic["description"])
-                    lines.append("")
-                    lines.append(topic["details"])
-                    if topic.get("code"):
-                        lines.append(f"💻 *Cod ilustrativ:*")
-                        lines.append(f"```python\n{topic['code'].strip()}\n```")
-                    lines.append("---")
-                
-                answer_text = "\n".join(lines)
-                concept_names = ", ".join(f"<b>{KNOWLEDGE_BASE[k]['title'].split(' ')[0]}</b>" for k in matched_topics)
-                analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Modul Comparativ Offline]</b> Concepte detectate simultan: {concept_names}
-</div>
-
-"""
-                return analysis_box + answer_text, [], None
-            
-            best_anchor = ""
-            
-            # 2. Verificare de înaltă precizie prin modelul Transformer BERT folosind ancore semantice multi-vector
-            if not kb_match:
-                q_emb = indexer.get_embeddings([question])[0]
-                kb_keys = list(KNOWLEDGE_BASE.keys())
-                
-                # Încărcăm / Cache-uim embeddings pentru ancorele din KNOWLEDGE_BASE în indexer
-                if not hasattr(indexer, "kb_anchor_embeddings") or not indexer.kb_anchor_embeddings:
-                    indexer.kb_anchor_embeddings = {}
-                    all_anchors = []
-                    anchor_keys = []
-                    for key in kb_keys:
-                        anchors = KNOWLEDGE_BASE[key].get("anchors", [KNOWLEDGE_BASE[key]["title"]])
-                        for anchor in anchors:
-                            all_anchors.append(anchor)
-                            anchor_keys.append((key, anchor))
-                    # Generăm vectorii de embedding într-un singur batch rapid
-                    embs = indexer.get_embeddings(all_anchors)
-                    for idx, (key, anchor) in enumerate(anchor_keys):
-                        indexer.kb_anchor_embeddings.setdefault(key, []).append((anchor, embs[idx]))
-                
-                scores = []
-                best_anchors = []
-                for key in kb_keys:
-                    anchor_data = indexer.kb_anchor_embeddings.get(key, [])
-                    max_sim = -1.0
-                    best_anc = ""
-                    for anchor, emb in anchor_data:
-                        sim = cosine_sim(q_emb, emb)
-                        if sim > max_sim:
-                            max_sim = sim
-                            best_anc = anchor
-                    scores.append(max_sim)
-                    best_anchors.append(best_anc)
-                
-                best_idx = int(np.argmax(scores))
-                best_score = scores[best_idx]
-                
-                if best_score > 0.65:
-                    kb_match = kb_keys[best_idx]
-                    kb_max_score = best_score
-                    best_anchor = best_anchors[best_idx]
-                    is_fallback_match = False
-                else:
-                    # Fallback moderat pe baza scorului maxim absolut peste 0.50
-                    if best_score > 0.50:
-                        kb_match = kb_keys[best_idx]
-                        kb_max_score = best_score
-                        best_anchor = best_anchors[best_idx]
-                        is_fallback_match = True
-                        
-            if kb_match:
-                # Am găsit o potrivire excelentă!
-                topic = KNOWLEDGE_BASE[kb_match]
-                lines = []
-                lines.append(f"### 💡 {topic['title']}\n")
-                lines.append(topic["description"])
-                lines.append("")
-                lines.append(topic["details"])
-                lines.append("")
-                if topic.get("code"):
-                    lines.append("---")
-                    lines.append("**💻 Fragment ilustrativ de cod / Utilizare:**")
-                    lines.append(f"```python\n{topic['code'].strip()}\n```")
-                    
-                answer_text = "\n".join(lines)
-                if is_fallback_match:
-                    analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(245, 158, 11, 0.08); border-left: 3px solid #f59e0b; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Aliniere Semantică Transformer BERT]</b> Conceptul recomandat este: <b>{topic['title']}</b> (scor similaritate: <code>{kb_max_score:.3f}</code>) <br>
-🎯 <i>Ancoră semântică CodeBERT:</i> <code>"{best_anchor or topic['title']}"</code>
-</div>
-
-"""
-                else:
-                    analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(99, 102, 241, 0.08); border-left: 3px solid #6366f1; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Aliniere Semantică Transformer BERT]</b> Subiect detectat: <b>{topic['title']}</b> (scor similaritate: <code>{kb_max_score:.3f}</code>) <br>
-🎯 <i>Ancoră semântică CodeBERT:</i> <code>"{best_anchor or topic['title']}"</code>
-</div>
-
-"""
-                answer_text = analysis_box + answer_text
-                return answer_text, [], kb_match
-        except Exception as e:
-            pass
-
-    # ── DETECTĂM DACĂ SE ÎNTREABĂ DESPRE UN FIȘIER ─────────────────────────────
-    target_file = None
-    for fpath in by_file.keys():
-        fname = fpath.lower().split("/")[-1]
-        # Potrivire exactă a numelui fișierului sau fără extensie (ex: "app.py" sau "app" în întrebare)
-        if fname in q or (len(fname.replace(".py", "")) > 2 and fname.replace(".py", "") in q.split()):
-            target_file = fpath
-            break
-
-    if target_file and subject:
-        subj_lower = subject.lower()
-        target_fname = target_file.lower().split("/")[-1]
-        is_part_of_file = subj_lower in target_fname or target_fname.startswith(subj_lower)
-        is_known_identifier = (subject in by_name) or (subj_lower in by_name)
-        if is_part_of_file or not is_known_identifier:
-            subject = None
-
-    if target_file and not subject:
-        # Utilizatorul întreabă despre un fișier întreg, nu o funcție/clasă anume
-        cks = by_file[target_file]
-        funcs = [c for c in cks if c.get("type") == "function"]
-        classes = [c for c in cks if c.get("type") == "class"]
-        
-        lines = []
-        lines.append(f"### 📂 Fișierul `{target_file}` din proiect\n")
-        
-        # Formulăm o explicație conversațională descriptivă în română despre fișier
-        desc = f"Fișierul `{target_file}` reprezintă un modul important din proiect. "
-        if "app.py" in target_file:
-            desc += "Acesta este punctul de intrare principal în aplicație (interfața Streamlit). Gestionează stările sesiunii, configurările paginilor, injectarea stilurilor CSS și coordonează toate filele (tab-urile) interactive: încărcarea proiectului, vizualizarea arborelui de fișiere, diagramele UML (Mermaid), căutarea semantică, auditul de securitate, chestionarele AST și sistemul de chatbot local bazat pe CodeBERT."
-        elif "code_parser.py" in target_file:
-            desc += "Acest modul este responsabil de parsarea codului și de extracția structurii sintactice. Conține logica de dezarhivare a proiectelor ZIP, scanarea fișierelor de cod acceptate, construirea arborelui de directoare și parsarea fișierelor prin arborele AST (Abstract Syntax Tree) pentru a genera chunk-uri (blocuri de cod) și diagramele Mermaid (UML, dependențe, secvență, flowchart)."
-        elif "vector_store.py" in target_file:
-            desc += "Acest modul se ocupă de vectorizarea codului și de căutarea semantică offline. Implementează clasa `CodeBERTIndexer` care rulează modelul CodeBERT local pe PyTorch (folosind MPS/CUDA/CPU) pentru a tokeniza codul, a extrage matricea de atenție (Self-Attention) și a indexa chunk-urile generate într-un index vectorial FAISS pentru interogări rapide."
-        elif "security_analyzer.py" in target_file:
-            desc += "Este modulul dedicat auditului de securitate static și semantic. Scanează fișierele Python cu un visitor AST (`SecurityVisitor`) pentru a detecta vulnerabilități comune (injecții SQL/shell, secrete hardcodate, except-uri generice) și folosește similaritatea semantică CodeBERT pentru a evalua riscul fragmentelor de cod."
-        else:
-            desc += f"Fișierul conține un număr de {len(cks)} blocuri logice de cod, acționând ca un modul de suport în proiect."
-            
-        lines.append(desc)
-        lines.append("")
-        
-        if classes:
-            lines.append("🧱 **Clase definite în acest fișier:**")
-            for c in classes:
-                doc_str = f" — *{c.get('docstring')}*" if c.get("docstring") else ""
-                lines.append(f"- `{c['name']}` (liniile {c['start_line']}–{c['end_line']}){doc_str}")
-            lines.append("")
-            
-        if funcs:
-            lines.append("⚙️ **Funcții definite în acest fișier:**")
-            for f in funcs[:12]:
-                doc_str = f" — *{f.get('docstring')}*" if f.get("docstring") else ""
-                lines.append(f"- `{f['name']}` (liniile {f['start_line']}–{f['end_line']}){doc_str}")
-            if len(funcs) > 12:
-                lines.append(f"- *și încă {len(funcs)-12} alte funcții...*")
-            lines.append("")
-            
-        # Citim primele 45 de linii din fișierul real pentru a le arăta ca fragment de cod de început
-        file_code = ""
-        try:
-            with open(target_file, "r", encoding="utf-8", errors="ignore") as f:
-                file_code = "".join(f.readlines()[:45])
-        except:
-            if cks:
-                file_code = cks[0].get("content", "")[:1000]
-                
-        if file_code:
-            lines.append("---")
-            lines.append(f"**💻 Structura de început a fișierului `{target_file}`:**")
-            lines.append(f"```python\n{file_code}\n```")
-            
-        answer_text = "\n".join(lines)
-        if indexer is not None and intent_detected and max_score > 0.40:
-            analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Clasificator Semantic Transformer]</b> Intenția detectată: <b>Căutare Localizare fișier</b> (scor similaritate: <code>{max_score:.3f}</code>)
-</div>
-
-"""
-            answer_text = analysis_box + answer_text
-            
-    # ── EXPLICAȚIE PROIECT COMPLET (PROJECT SUMMARY) ─────────────────────────
-    if is_project_summary:
-        lines = []
-        lines.append("### 🛠️ Explicația de Ansamblu a Proiectului Tău (Code Explainer & Security Analyzer)\n")
-        lines.append("Întregul proiect este o aplicație **Streamlit** extrem de modernă, concepută pentru **analiza statică de cod, căutare semantică locală și audit de securitate offline**. Sistemul utilizează modelul local de deep learning **CodeBERT** (pe PyTorch) pentru a înțelege semnificația codului fără a apela API-uri externe.\n")
-        
-        lines.append("#### 📂 Structura și Rolul Modulelor:")
-        lines.append("- 🖥️ **`app.py` (Interfața Utilizator)**: Reprezintă panoul de control central. Acesta configurează designul vizual premium (CSS personalizat), administrează starea sesiunilor Streamlit (`st.session_state`), desenează graficele interactive de Atenție (Plotly) și coordonează toate filele funcționale ale aplicației.")
-        lines.append("- ⚙️ **`code_parser.py` (Analizorul AST & Diagram Generator)**: Se ocupă de procesarea brută a codului. Dezarhivează fișierele ZIP, le filtrează și folosește modulul Python `ast` (Abstract Syntax Tree) pentru a identifica clasele și funcțiile. De asemenea, generează automat diagrame de dependență și secvență în format **Mermaid (UML)**.")
-        lines.append("- 🧠 **`vector_store.py` (Căutarea Semantică Hibridă)**: Este creierul matematic al proiectului. Încarcă modelul CodeBERT local pe CPU/MPS/GPU, generează vectori de embedding de 768 de dimensiuni pentru fiecare fragment de cod și creează un index vectorial **FAISS** local. Implementează, de asemenea, căutarea hibridă combinând CodeBERT cu un motor lexical exact **TF-IDF**.")
-        lines.append("- 🛡️ **`security_analyzer.py` (Auditul de Securitate)**: Reprezintă inspectorul de siguranță. Scanează fișierele Python cu un vizitator AST (`SecurityVisitor`) pentru a depista automat vulnerabilități critice (de tip SQL Injection, rulare de comenzi shell, secrete/parole hardcodate) și clasifică riscurile semantic.")
-        lines.append("")
-        
-        lines.append("#### 🔁 Cum Colaborează Aceste Componente:")
-        lines.append("1. **Încărcare**: Încarci o arhivă ZIP cu cod în interfața Streamlit (`app.py`).")
-        lines.append("2. **Parsare**: `code_parser.py` descompune fișierele în fragmente (chunk-uri) logice și extrage metadate AST (parametri, importuri, apeluri).")
-        lines.append("3. **Indexare**: `vector_store.py` convertește aceste fragmente în vectori și le indexează în FAISS + TF-IDF.")
-        lines.append("4. **Interacțiune**: Când pui o întrebare, chatbot-ul folosește CodeBERT pentru a-ți înțelege intenția și a-ți căuta exact răspunsurile, în timp ce `security_analyzer.py` validează calitatea codului din punct de vedere al securității.")
-        
-        answer_text = "\n".join(lines)
-        analysis_box = """<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Prezentare de Ansamblu Proiect]</b> Am generat un rezumat complet al funcționalității întregului cod din codebase.
-</div>
-
-"""
-        return analysis_box + answer_text, [], None
-
-    # ── STATISTICI / OVERVIEW ────────────────────────────────────────────────
-    if is_stats:
-        lines = ["### Sumar proiect\n"]
-        lines.append(f"| Metrică | Valoare |")
-        lines.append(f"|---------|---------|")
-        lines.append(f"| Fișiere indexate | **{stats.get('total_files', len(by_file))}** |")
-        lines.append(f"| Funcții | **{stats.get('total_functions','?')}** |")
-        lines.append(f"| Clase | **{stats.get('total_classes','?')}** |")
-        lines.append(f"| Lungime medie funcție | **{stats.get('avg_func_lines','?')} linii** |")
-        lf = stats.get("largest_func")
-        if lf:
-            lines.append(f"| Funcția cea mai lungă | **`{lf['name']}`** ({lf.get('end_line',0)-lf.get('start_line',0)} linii) |")
-        mc = stats.get("most_called")
-        if mc:
-            n_callers = len(called_by.get(mc, []))
-            lines.append(f"| Funcția cel mai des apelată | **`{mc}`** ({n_callers} apeluri detectate) |")
-        lines.append(f"\n**Fișiere:**")
-        for f in list(by_file.keys())[:10]:
-            n = len([c for c in by_file[f] if c.get("type") in ("function","class")])
-            lines.append(f"- `{f}` — {n} funcții/clase")
-        return "\n".join(lines), [], None
-
-    # ── LISTARE FIȘIERE ───────────────────────────────────────────────────────
-    if is_file:
-        lines = [f"**Proiectul conține {len(by_file)} fișiere indexate:**\n"]
-        for f, cks in by_file.items():
-            funcs = [c["name"] for c in cks if c.get("type") == "function"]
-            classes = [c["name"] for c in cks if c.get("type") == "class"]
-            parts = []
-            if classes: parts.append("clase: " + ", ".join(f"`{n}`" for n in classes))
-            if funcs:   parts.append("funcții: " + ", ".join(f"`{n}`" for n in funcs[:6]) + ("..." if len(funcs)>6 else ""))
-            lines.append(f"- `{f}` — " + "; ".join(parts) if parts else f"- `{f}`")
-        return "\n".join(lines), [], None
-
-    # ── LISTARE FUNCȚII / CLASE ───────────────────────────────────────────────
-    if is_list:
-        target_file = None
-        for f in by_file:
-            if any(word in q for word in [f.lower(), f.split("/")[-1].lower().replace(".py","")]):
-                target_file = f
-                break
-        pool = by_file.get(target_file, all_chunks) if target_file else all_chunks
-        funcs   = [c for c in pool if c.get("type") == "function"]
-        classes = [c for c in pool if c.get("type") == "class"]
-        header = f"**{'Fișierul `'+target_file+'`' if target_file else 'Proiectul'} conține:**\n"
-        lines = [header]
-        if classes:
-            lines.append(f"**Clase ({len(classes)}):** " + ", ".join(f"`{c['name']}`" for c in classes))
-        if funcs:
-            lines.append(f"\n**Funcții ({len(funcs)}):**")
-            gf = {}
-            for c in funcs:
-                gf.setdefault(c.get("file_path","?"), []).append(c)
-            for fp, items in gf.items():
-                lines.append(f"- `{fp}`: " + ", ".join(f"`{c['name']}`" for c in items[:10]) + ("..." if len(items)>10 else ""))
-        return "\n".join(lines), [], None
-
-    # ── IMPORTURI PROIECT ─────────────────────────────────────────────────────
-    if is_deps:
-        # Dacă există un subiect valid în codebase, arătăm importurile acestuia
-        valid_subject = subject and (subject in by_name or subject.lower() in by_name)
-        if valid_subject:
-            chunk = by_name.get(subject) or by_name.get(subject.lower())
-            ai = analyze_chunk_ast(chunk.get("content", ""))
-            imps = sorted(list(set(ai["imports"])))
-            if imps:
-                return f"Elementul `{subject}` din fișierul `{chunk.get('file_path')}` folosește următoarele importuri direct:\n" + ", ".join(f"`{i}`" for i in imps), [], None
-            else:
-                return f"Elementul `{subject}` din fișierul `{chunk.get('file_path')}` nu conține importuri directe în corpul său.", [], None
-        else:
-            # Altfel, afișăm toate importurile din toate fișierele proiectului
-            lines = ["**Importuri detectate per fișier în întregul proiect:**\n"]
-            for f, imps in all_imports.items():
-                uniq = sorted(set(imps))
-                if uniq:
-                    lines.append(f"- `{f}`: " + ", ".join(f"`{i}`" for i in uniq[:12]))
-                else:
-                    lines.append(f"- `{f}`: *fără importuri detectate*")
-            return "\n".join(lines), [], None
-
-    # ── GĂSIM CHUNK-UL SUBIECT ────────────────────────────────────────────────
-    # 1. Căutare exactă în KB by_name
-    chunk = by_name.get(subject) or by_name.get(subject.lower())
-    # 2. Căutare parțială în KB
-    if not chunk and subject:
-        matches = [c for n, c in by_name.items() if subject.lower() in n.lower()]
-        chunk = matches[0] if matches else None
-    # 3. Fallback: FAISS results
-    if not chunk:
-        real = [c for c in results if c.get("type") in ("function","class")]
-        chunk = real[0] if real else (results[0] if results else None)
-    # 4. Text search dacă tot nu avem
-    if not chunk and subject:
-        found = _text_search_chunks(subject, all_chunks)
-        chunk = found[0] if found else None
-    # 5. Dacă e concept/variabilă (nu funcție) sau întrebare generală
-    if not chunk:
-        # 1. Căutare în Dicționarul Universal Offline (Docker, React, etc.)
-        matched_key = None
-        for key in UNIVERSAL_DICT.keys():
-            if key in q or (subject and key in subject.lower()):
-                matched_key = key
-                break
-        if matched_key:
-            topic = UNIVERSAL_DICT[matched_key]
-            lines = []
-            lines.append(f"### 💡 {topic['title']}\n")
-            lines.append(topic["description"])
-            lines.append("")
-            lines.append(topic["details"])
-            if topic.get("code"):
-                lines.append("---")
-                lines.append("**💻 Fragment ilustrativ / Configurare:**")
-                lines.append(f"```python\n{topic['code'].strip()}\n```")
-            answer_text = "\n".join(lines)
-            analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Modul Educațional Universal]</b> Subiect detectat: <b>{topic['title']}</b>
-</div>
-
-"""
-            return analysis_box + answer_text, [], f"dynamic_fallback_{matched_key}"
-
-        # 2. Căutare utilizări în proiect dacă subiectul există
-        if subject:
-            usages = _analyze_variable_usage(subject, all_chunks)
-            if usages:
-                lines = [f"**`{subject}`** nu este o funcție/clasă definită, dar apare în **{len(usages)} locuri** în proiect:\n"]
-                for fname, fpath, usage_line in usages[:12]:
-                    lines.append(f"- `{fname}` (`{fpath}`): `{usage_line.strip()[:90]}`")
-                return "\n".join(lines), [], None
-            else:
-                # 3. Fallback dinamic generativ pentru orice alt subiect
-                if len(subject) > 2:
-                    answer_text = _generate_dynamic_fallback(subject)
-                    clean_sub = subject.lower().replace(" ", "_")
-                    return answer_text, [], f"dynamic_fallback_{clean_sub}"
-
-        # 4. Fallback suplimentar pentru întrebări generale fără subiect extras clar
-        words = _re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', q)
-        NOISE = {"ce", "este", "e", "face", "cum", "unde", "care", "proiect", "cod", "aplicatie", "programare", "functia", "clasa"}
-        candidates = [w for w in words if w.lower() not in NOISE and len(w) > 2]
-        if candidates:
-            fallback_subject = candidates[-1]
-            answer_text = _generate_dynamic_fallback(fallback_subject)
-            clean_sub = fallback_subject.lower().replace(" ", "_")
-            return answer_text, [], f"dynamic_fallback_{clean_sub}"
-
-        # 5. Răspuns default extrem de detaliat (dacă tot nu se poate extrage nimic)
-        if all_chunks and (is_explain or is_how or is_where or subject):
-            chunk = all_chunks[0]
-        else:
-            # Răspuns extrem de prietenos ca asistent universal de programare local!
-            lines = []
-            lines.append("### 🤖 Salut! Eu sunt asistentul tău local de programare.")
-            lines.append("Sunt proiectat să rulez **100% offline** utilizând arhitectura locală a modelului **Transformer (CodeBERT)**. Te pot ajuta cu o mulțime de chestii din temele tale:")
-            lines.append("")
-            lines.append("👉 **Analiza Codului Tău**:")
-            lines.append("- Întreabă-mă despre orice funcție, clasă sau fișier din proiect (ex: *\"ce face app.py\"*, *\"ce importuri am\"*).")
-            lines.append("")
-            lines.append("👉 **Lecții și Concepte Academice (Teorie & Exemple SQL/Python)**:")
-            lines.append("- **Baze de Date / Licență**: Normalizare SQL (**1NF, 2NF, 3NF**), Tranzacții **ACID**, securitate (**SQL Injection**).")
-            lines.append("- **Teorie AI & Compilatoare**: Mecanismul de **Self-Attention** în Transformers, **AST** (Abstract Syntax Tree).")
-            lines.append("")
-            lines.append("👉 **Ghiduri de Sintaxă Multi-Limbaj (Sinteză Cod)**:")
-            lines.append("- Întreabă-mă cum funcționează variabilele, funcțiile, clasele, buclele sau listele în **Python, Java, C++, JavaScript, Rust, Go sau C#** (ex: *\"cum declar o variabilă în java\"*, *\"cum fac un loop în C++\"*).")
-            
-            answer_text = "\n".join(lines)
-            return answer_text, [], None
-
-    # Dacă chunk-ul găsit e module_level (globals), preferăm usage analysis
-    if chunk.get("type") == "module_level" and subject:
-        usages = _analyze_variable_usage(subject, all_chunks)
-        real = [c for c in all_chunks if c.get("name","").lower() == subject.lower() and c.get("type") in ("function","class")]
-        if real:
-            chunk = real[0]  # am găsit funcția reală
-        elif usages:
-            lines = [f"**`{subject}`** apare în **{len(usages)} locuri** în proiect:\n"]
-            for fname, fpath, usage_line in usages[:12]:
-                lines.append(f"- `{fname}` (`{fpath}`): `{usage_line.strip()[:90]}`")
-            return "\n".join(lines), [], None
-
-    # ── CONSTRUIM RĂSPUNSUL ───────────────────────────────────────────────────
-    name    = chunk.get("name","?")
-    fpath   = chunk.get("file_path","?")
-    sl      = chunk.get("start_line",0)
-    el      = chunk.get("end_line",0)
-    ctype   = chunk.get("type","function")
-    doc     = chunk.get("docstring","").strip()
-    code    = chunk.get("content","")
-    n_lines = el - sl
-    ai      = analyze_chunk_ast(code)
-    lines   = []
-
-    async_tag = "asincronă " if ai["is_async"] else ""
-    lines.append(f"### `{name}` — {async_tag}{ctype} în `{fpath}` (liniile {sl}–{el}, {n_lines} linii)\n")
-    if doc:
-        lines.append(f"📄 **Documentație oficială (docstring):** *\"{doc}\"*\n")
-
-    # CE FACE (default dacă nu e întrebare specifică)
-    default_explain = not any([is_where, is_callers, is_calls, is_args, is_returns, is_errors, is_deps])
-    if is_explain or is_how or default_explain:
-        parts = []
-        if ctype == "class":
-            if ai["class_bases"]:
-                parts.append(f"moștenește din clasa/clasele {', '.join(f'`{b}`' for b in ai['class_bases'])}")
-            methods = [c for c in all_chunks if c.get("file_path")==fpath and c.get("type")=="function" and c.get("name")!=name]
-            if methods:
-                parts.append(f"încapsulează {len(methods)} metode (inclusiv: " + ", ".join(f"`{m['name']}`" for m in methods[:5]) + ")")
-        else:
-            if ai["args"]:
-                parts.append(f"primește ca intrare parametrii **{', '.join(f'`{a}`' for a in ai['args'])}**")
-            if ai["decorators"]:
-                parts.append(f"este decorată cu `{', '.join(f'`{d}`' for d in ai['decorators'])}`")
-            if ai["calls"]:
-                parts.append(f"apelează intern alte elemente precum: {', '.join(f'`{c}`' for c in ai['calls'][:6])}")
-            if ai["loops"]:
-                parts.append(f"rulează operații repetitive folosind {ai['loops']} structuri ciclice (for/while)")
-            if ai["conditions"]:
-                parts.append(f"conține logică decizională cu {ai['conditions']} ramificații condiționale (if/elif)")
-            if ai["comprehensions"]:
-                parts.append(f"optimizează lucrul cu liste/colecții prin {ai['comprehensions']} expresii de tip comprehension")
-            if ai["has_try"]:
-                parts.append("are mecanisme defensive de tratare a erorilor cu blocuri `try/except` cu scopul de a evita întreruperea execuției")
-            if ai["returns"]:
-                ret = ", ".join(f"`{r[:70]}`" for r in ai["returns"][:2])
-                parts.append(f"întoarce un rezultat de forma: {ret}")
-            if ai["raises"]:
-                parts.append(f"poate arunca în mod controlat excepții specifice: {', '.join(f'`{e}`' for e in ai['raises'])}")
-                
-        lines.append("🔍 **Formulare Răspuns & Explicație:**")
-        if ctype == "class":
-            desc = f"Clasa `{name}` este definită în modulul `{fpath}` și acționează ca o entitate structurală în cadrul temei. "
-        else:
-            desc = f"Funcția `{name}` se găsește în fișierul `{fpath}` și reprezintă o componentă logică responsabilă de execuția unui comportament specific. "
-            
-        if doc:
-            desc += f"Conform documentației sale interne, rolul său principal este definit ca fiind: *\"{doc}\"*. "
-        else:
-            desc += "Deși nu are un comentariu docstring descriptiv, o analiză structurală detaliată ne arată cum operează. "
-            
-        if parts:
-            desc += f"Mai exact, din punct de vedere al execuției, acest fragment: {'; '.join(parts)}."
-        else:
-            desc += "Este un fragment simplu, cu execuție directă, fără structuri complexe sau apeluri externe detectate."
-            
-        lines.append(desc)
-        lines.append("")
-
-    if is_where:
-        lines.append(f"📂 **Localizare:** `{fpath}`, liniile **{sl}–{el}**\n")
-
-    if is_args:
-        if ai["args"]:
-            lines.append(f"📥 **Parametri:** {', '.join(f'`{a}`' for a in ai['args'])}\n")
-        else:
-            lines.append("📥 **Parametri:** Fără argumente externe (sau doar `self`).\n")
-
-    if is_returns:
-        if ai["returns"]:
-            lines.append("📤 **Returnează:**")
-            for r in ai["returns"]: lines.append(f"- `{r[:80]}`")
-            lines.append("")
-        else:
-            lines.append("📤 **Returnează:** `None` (fără `return` explicit).\n")
-
-    if is_errors:
-        if ai["raises"]:
-            lines.append(f"⚠️ **Excepții:** {', '.join(f'`{e}`' for e in ai['raises'])}\n")
-        elif ai["has_try"]:
-            lines.append("⚠️ **Excepții:** Are `try/except` dar nu ridică explicit.\n")
-        else:
-            lines.append("⚠️ **Excepții:** Nu aruncă excepții.\n")
-
-    if is_deps:
-        imps = list(set(ai["imports"]))
-        if imps:
-            lines.append(f"📦 **Importuri în fragment:** {', '.join(f'`{i}`' for i in imps[:8])}\n")
-        else:
-            lines.append("📦 **Importuri:** Fără importuri directe în acest fragment.\n")
-
-    if is_calls:
-        direct = sorted(call_graph.get(name, set()))
-        known  = [c for c in direct if c in by_name]
-        extern = [c for c in direct if c not in by_name]
-        if known:
-            lines.append(f"🔁 **Apelează funcții din proiect:** {', '.join(f'`{c}`' for c in known[:6])}\n")
-        if extern:
-            lines.append(f"🔁 **Apelează externe/built-in:** {', '.join(f'`{c}`' for c in extern[:6])}\n")
-        if not known and not extern:
-            lines.append("🔁 Nu am detectat apeluri de funcții în acest fragment.\n")
-
-    if is_callers:
-        callers = sorted(called_by.get(name, set()))
-        if callers:
-            lines.append(f"🔗 **Apelată din:** {', '.join(f'`{c}`' for c in callers[:6])}\n")
-        else:
-            lines.append(f"🔗 **Apelată din:** Nu am detectat apeluri directe la `{name}`.\n")
-
-    # ── FUNCȚII SIMILARE (din FAISS results) ─────────────────────────────────
-    if is_similar:
-        similar = [c for c in results if c.get("name") != name and c.get("type") in ("function","class")]
-        if similar:
-            lines.append("🔀 **Funcții similare semantic (CodeBERT):**")
-            for s in similar[:4]:
-                score = s.get("score", 0)
-                lines.append(f"- `{s['name']}` în `{s['file_path']}` — distanță L2: `{score:.4f}`")
-        else:
-            lines.append("🔀 Nu am găsit funcții similare semantic.\n")
-
-    # ── FRAGMENTE CONEXE ──────────────────────────────────────────────────────
-    faiss_others = [c for c in results if c.get("name") != name and c.get("type") in ("function","class")]
-    if faiss_others and not is_similar:
-        lines.append("---")
-        lines.append(f"**Fragmente conexe găsite de CodeBERT ({len(faiss_others)}):**")
-        for r in faiss_others[:3]:
-            d = r.get("docstring","").strip()
-            lines.append(f"- `{r['name']}` în `{r['file_path']}` (lin. {r['start_line']}–{r['end_line']})" + (f" — {d[:80]}" if d else ""))
-
-    if code:
-        lines.append("---")
-        lines.append("**💻 Fragmentul de cod sursă identificat:**")
-        lines.append(f"```python\n{code[:850]}\n```")
-        if len(code) > 850:
-            lines.append(f"*Notă: codul a fost trunchiat pentru lizibilitate (liniile {sl}–{el} din `{fpath}`).*")
-
-    answer_text = "\n".join(lines)
-    if indexer is not None and intent_detected and max_score > 0.40:
-        friendly_names = {
-            "explain": "Descriere / Rol cod",
-            "where": "Căutare Localizare fișier",
-            "args": "Analiză Parametri intrare",
-            "returns": "Analiză Valori returnate",
-            "errors": "Gestionare / Aruncare Erori",
-            "callers": "Relații de apel (Cine îl apelează)",
-            "calls": "Sub-apeluri efectuate (Ce apelează)",
-            "similar": "Căutare Semantică cod similar"
-        }
-        detected_name = friendly_names.get(intent_detected, intent_detected)
-        analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Clasificator Semantic Transformer]</b> Intenția detectată: <b>{detected_name}</b> (scor similaritate: <code>{max_score:.3f}</code>)
-</div>
-
-"""
-        answer_text = analysis_box + answer_text
-
-    return answer_text, [chunk] + faiss_others[:2], None
-
-
 def render_mermaid(mermaid_code, height=500):
     escaped = mermaid_code.replace("`", "\\`").replace("${", "\\${")
     html_code = f"""<!DOCTYPE html>
@@ -3809,7 +2763,7 @@ else:
         "Securitate",
         "Quiz Cod & Semantic",
         "Analiză & Recomandări",
-        "Chatbot CodeBERT",
+        "Analiză de Impact Semantic (AI)",
     ])
     
     # ----------------- TAB 1: DASHBOARD & CODE VIEW -----------------
@@ -4759,179 +3713,156 @@ def {n2}({args2 or 'data'}):
             else:
                 st.info("Apasă **Rulează Analiza Code Smells** pentru a începe.")
 
-    # ----------------- TAB 7: CHATBOT CODEBERG -----------------
+    # ----------------- TAB 7: ANALIZĂ DE IMPACT SEMANTIC (AI) -----------------
     with tab7:
-        st.markdown("## Chatbot CodeBERT — Întreabă despre codul tău")
-        st.markdown("Chatbot-ul folosește **CodeBERT + FAISS** pentru a găsi fragmentele de cod relevante din proiect și a răspunde la întrebările tale. Funcționează **100% offline**, fără API extern.")
+        st.markdown("## 🛡️ Analizor de Impact Semantic (AI) — Schimbări în Cod")
+        st.markdown("Selectează o funcție sau o clasă pe care intenționezi să o modifici. Sistemul utilizează **analiza AST statică** (pentru apeluri fizice directe) combinată cu **similaritatea semantică CodeBERT** (pentru propagarea conceptuală) pentru a determina riscul de regresie în restul proiectului.")
         st.write("---")
 
         if not st.session_state.project_processed:
-            st.info("Încarcă un proiect mai întâi din sidebar pentru a putea folosi chatbot-ul.")
+            st.info("Încarcă un proiect mai întâi din sidebar pentru a putea rula analiza de impact semantic.")
         else:
-            # Tratam întrebarea venită de la butoanele rapide
-            if "query_trigger" not in st.session_state:
-                st.session_state.query_trigger = None
+            kb = st.session_state.project_kb
+            by_name = kb.get("by_name", {})
+            called_by = kb.get("called_by", {})
+            
+            all_elements = sorted(list(by_name.keys()))
+            
+            if not all_elements:
+                st.warning("Nu s-au putut extrage elemente structurale (clase/funcții) din acest codebase.")
+            else:
+                col_sel, col_empty = st.columns([2, 1])
+                with col_sel:
+                    selected_el = st.selectbox("Alege funcția sau clasa pe care vrei să o modifici:", all_elements)
 
-            programmatic_q = None
-            if st.session_state.query_trigger:
-                programmatic_q = st.session_state.query_trigger
-                st.session_state.query_trigger = None # Clear it immediately
-
-            # Inițializare istoric chat
-            if "chat_history" not in st.session_state:
-                st.session_state.chat_history = []
-
-            # Afișare mesaje anterioare
-            for idx, msg in enumerate(st.session_state.chat_history):
-                with st.chat_message(msg["role"], avatar="🧑‍💻" if msg["role"] == "user" else "🤖"):
-                    st.markdown(msg["content"], unsafe_allow_html=True)
-                    if msg.get("chunks"):
-                        with st.expander("Fragmente de cod relevante găsite de CodeBERT", expanded=False):
-                            for c in msg["chunks"]:
-                                st.markdown(f"**{c.get('name','?')}** — `{c.get('file_path','?')}` (liniile {c.get('start_line',0)}–{c.get('end_line',0)})")
-                                st.code(c["content"][:400], language="python")
+                if selected_el:
+                    chunk = by_name[selected_el]
+                    ctype = chunk.get("type", "function")
+                    fpath = chunk.get("file_path", "?")
+                    sl = chunk.get("start_line", 0)
+                    el = chunk.get("end_line", 0)
+                    code_content = chunk.get("content", "")
                     
-                    # Dacă acesta este ultimul mesaj și este de la asistent, adăugăm butoanele de follow-up dinamic
-                    is_last = (idx == len(st.session_state.chat_history) - 1)
-                    if is_last and msg["role"] == "assistant":
-                        user_question = ""
-                        if idx > 0 and st.session_state.chat_history[idx - 1]["role"] == "user":
-                            user_question = st.session_state.chat_history[idx - 1]["content"]
+                    st.markdown(f"📂 **Localizare:** `{fpath}` · **Tip:** `{ctype}` · **Linii:** `{sl}–{el}`")
+                    
+                    with st.expander("📝 Vizualizează codul sursă curent", expanded=False):
+                        st.code(code_content, language="python", line_numbers=True)
+                    
+                    st.write("---")
+                    
+                    # 1. Determinare Apeluri Directe (Risc Critic - AST)
+                    direct_callers = sorted(list(called_by.get(selected_el, set())))
+                    
+                    # 2. Determinare Corelații Semantice (Risc Mediu - CodeBERT FAISS)
+                    high_sem_correlations = []
+                    medium_sem_correlations = []
+                    
+                    try:
+                        indexer = st.session_state.indexer
+                        # Folosim căutarea FAISS din CodeBERT pentru a găsi fragmente similare semantic
+                        sim_results = indexer.search(code_content, top_k=15)
+                        for c in sim_results:
+                            c_name = c.get("name", "?")
+                            c_similarity = c.get("similarity", 0.0)
+                            
+                            # Excludem elementul curent sau alte instanțe cu același nume
+                            if c_name != selected_el and c_name.lower() != selected_el.lower():
+                                if c_similarity > 0.80:
+                                    high_sem_correlations.append(c)
+                                elif c_similarity > 0.65:
+                                    medium_sem_correlations.append(c)
+                    except Exception as ex:
+                        pass
+                    
+                    # 3. Calcul Scor de Impact (Change Impact Score %)
+                    # Formula: 10% de bază + 25% per apelant direct + 15% per corelație semantică mare + 5% per corelație medie
+                    impact_score = 10
+                    impact_score += len(direct_callers) * 25
+                    impact_score += len(high_sem_correlations) * 15
+                    impact_score += len(medium_sem_correlations) * 5
+                    impact_score = min(impact_score, 100)
+                    
+                    # Culoare în funcție de risc
+                    if impact_score >= 70:
+                        risk_color = "#ef4444"  # Roșu (Risc Critic)
+                        risk_label = "CRITIC (Risc ridicat de regresie)"
+                        bg_alert = "rgba(239, 68, 68, 0.08)"
+                    elif impact_score >= 40:
+                        risk_color = "#f59e0b"  # Portocaliu (Risc Mediu)
+                        risk_label = "MEDIU (Necesită atenție sporită)"
+                        bg_alert = "rgba(245, 158, 11, 0.08)"
+                    else:
+                        risk_color = "#10b981"  # Verde (Risc Scăzut)
+                        risk_label = "SCĂZUT (Modificare sigură)"
+                        bg_alert = "rgba(16, 185, 129, 0.08)"
                         
-                        kb_match = msg.get("kb_match")
-                        follow_ups = generate_follow_up_questions(user_question, msg["content"], kb_match)
+                    # Rând de metrici premium
+                    m1, m2, m3 = st.columns(3)
+                    with m1:
+                        st.metric("Apeluri Fizice Directe (AST)", len(direct_callers))
+                    with m2:
+                        st.metric("Corelații Semantice AI", len(high_sem_correlations) + len(medium_sem_correlations))
+                    with m3:
+                        st.metric("Scor Impact Schimbare", f"{impact_score}%")
                         
-                        st.markdown("<div style='margin-top:15px; color:#38bdf8; font-weight:600; font-size:0.9em;'>⚡ Întrebări recomandate:</div>", unsafe_allow_html=True)
-                        cols = st.columns(len(follow_ups))
-                        for col_idx, f_q in enumerate(follow_ups):
-                            with cols[col_idx]:
-                                if st.button(f_q, key=f"fup_{idx}_{col_idx}", use_container_width=True):
-                                    st.session_state.query_trigger = f_q
-                                    st.rerun()
-
-            # Input utilizator
-            user_q = st.chat_input("Întreabă ceva despre codul tău, ex: Ce face funcția X? Unde se inițializează Y?")
-
-            active_q = programmatic_q or user_q
-
-            if active_q:
-                # Afișăm mesajul utilizatorului
-                with st.chat_message("user", avatar="🧑‍💻"):
-                    st.markdown(active_q)
-                st.session_state.chat_history.append({"role": "user", "content": active_q})
-
-                with st.chat_message("assistant", avatar="🤖"):
-                    with st.spinner("CodeBERT caută și analizează codul..."):
-                        try:
-                            indexer = st.session_state.indexer
-                            all_chunks = st.session_state.chunks
-
-                            # Construim KB lazy dacă nu există (proiect indexat anterior)
-                            if "project_kb" not in st.session_state or not st.session_state.project_kb.get("by_name"):
-                                st.session_state.project_kb = build_project_knowledge(all_chunks)
-
-                            kb = st.session_state.project_kb
-                            results = indexer.search(active_q, top_k=5)
-                            answer, found_chunks, kb_match = build_chatbot_answer(active_q, results, all_chunks, kb=kb, indexer=indexer)
-
-                            st.markdown(answer, unsafe_allow_html=True)
-
-                            # Afișare Heatmap de Self-Attention pentru întrebare
-                            with st.expander("🔍 Vizualizează Atenția Transformer pentru Întrebare", expanded=False):
-                                st.markdown("Mecanismul de **Self-Attention** din Transformer: celulele mai luminoase indică o atenție sporită acordată între tokenii respectivi din întrebarea ta.")
-                                try:
-                                    import plotly.graph_objects as go
-                                    indexer.load_model()
-                                    import torch
-                                    inputs = indexer.tokenizer(active_q, return_tensors="pt", truncation=True, max_length=25)
-                                    tokens_raw = indexer.tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
-                                    inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-                                    with torch.no_grad():
-                                        outputs = indexer.model(**inputs, output_attentions=True)
-                                    
-                                    if hasattr(outputs, 'attentions') and outputs.attentions is not None and len(outputs.attentions) > 0:
-                                        last_layer = outputs.attentions[-1][0].cpu().numpy()  # (12, seq, seq)
-                                    else:
-                                        # Fallback elegant cu matrice identitate / uniformă
-                                        last_layer = np.zeros((12, len(tokens_raw), len(tokens_raw)))
-                                        for h in range(12):
-                                            last_layer[h] = np.eye(len(tokens_raw))
-                                    att_matrix = last_layer.mean(axis=0)  # Media tuturor celor 12 capete
-                                    
-                                    def clean_token(t):
-                                        t = t.replace("##", "·")
-                                        t = t.replace("Ġ", " ")
-                                        t = t.replace("[CLS]", "⟨CLS⟩")
-                                        t = t.replace("[SEP]", "⟨SEP⟩")
-                                        t = t.replace("[PAD]", "⟨PAD⟩")
-                                        return t
-
-                                    display_tokens = [clean_token(t) for t in tokens_raw]
-                                    n = len(display_tokens)
-                                    
-                                    hover = [[f"<b>{display_tokens[i]}</b> → <b>{display_tokens[j]}</b><br>Atenție: {att_matrix[i,j]:.4f}"
-                                              for j in range(n)] for i in range(n)]
-                                              
-                                    fig = go.Figure(go.Heatmap(
-                                        z=att_matrix,
-                                        x=display_tokens,
-                                        y=display_tokens,
-                                        colorscale="Plasma",
-                                        hoverinfo="text",
-                                        text=hover,
-                                        colorbar=dict(
-                                            title="Intensitate",
-                                            titleside="right",
-                                            tickfont=dict(color="#c9d1d9"),
-                                            titlefont=dict(color="#c9d1d9"),
-                                        ),
-                                        zmin=0, zmax=float(att_matrix.max() + 1e-9),
-                                    ))
-                                    
-                                    fig.update_layout(
-                                        title=dict(text="Self-Attention Heatmap pe Întrebare", font=dict(color="#38bdf8", size=14)),
-                                        xaxis=dict(tickfont=dict(color="#c9d1d9", size=11), tickangle=-45, side="bottom"),
-                                        yaxis=dict(tickfont=dict(color="#c9d1d9", size=11), autorange="reversed"),
-                                        paper_bgcolor="#0d1117",
-                                        plot_bgcolor="#0d1117",
-                                        margin=dict(l=80, r=40, t=60, b=100),
-                                        height=400,
-                                    )
-                                    st.plotly_chart(fig, use_container_width=True)
-                                    
-                                    # Afișăm top 3 conexiuni
-                                    flat = [(att_matrix[i,j], display_tokens[i], display_tokens[j])
-                                            for i in range(n) for j in range(n) if i != j]
-                                    flat.sort(reverse=True)
-                                    st.markdown("**Top 3 conexiuni de atenție în întrebarea ta:**")
-                                    for score, src, dst in flat[:3]:
-                                        st.markdown(f"- `{src}` → `{dst}` &nbsp; (atenție: **{score:.4f}**)")
-                                        
-                                except Exception as att_err:
-                                    st.warning(f"Nu s-a putut genera Heatmap-ul de atenție: {str(att_err)}")
-
-                            if found_chunks:
-                                with st.expander("Cod sursă — fragmente găsite de CodeBERT", expanded=False):
-                                    for c in found_chunks[:3]:
-                                        st.markdown(f"**`{c.get('name','?')}`** — `{c.get('file_path','?')}` · liniile {c.get('start_line',0)}–{c.get('end_line',0)}")
-                                        st.code(c["content"][:600], language="python")
-
-                            st.session_state.chat_history.append({
-                                "role": "assistant",
-                                "content": answer,
-                                "chunks": found_chunks[:3] if found_chunks else [],
-                                "kb_match": kb_match
-                            })
-                            st.rerun()
-
-                        except Exception as e:
-                            err_msg = f"Eroare: {str(e)}"
-                            st.error(err_msg)
-                            st.code(traceback.format_exc(), language="text")
-                            st.session_state.chat_history.append({"role": "assistant", "content": err_msg})
-
-            # Buton resetare chat
-            if st.session_state.chat_history:
-                if st.button("Șterge conversația", use_container_width=False):
-                    st.session_state.chat_history = []
-                    st.rerun()
+                    st.markdown(f"""
+                    <div style="padding:16px; border-radius:10px; border: 1px solid {risk_color}; border-left: 5px solid {risk_color}; background:{bg_alert}; margin:16px 0;">
+                        <h4 style="margin:0; color:{risk_color};">Evaluare Risc: {risk_label}</h4>
+                        <p style="margin:8px 0 0 0; color:#e2e8f0; font-size:0.95em;">
+                            Modificarea elementului <code>{selected_el}</code> are un scor de impact de <b>{impact_score}%</b> în întregul proiect. 
+                            Verifică ierarhia de mai jos pentru a propaga schimbările în siguranță.
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.write("---")
+                    
+                    # 4. Afișare Harta Propagării
+                    st.markdown("### 🗺️ Harta Propagării Impactului")
+                    
+                    # --- Nivel 1: Risc Critic ---
+                    st.markdown("#### 🔴 Apeluri Fizice Directe (Risc Critic - AST)")
+                    if not direct_callers:
+                        st.markdown("<span style='color:#94a3b8; font-size:0.9em; font-style:italic;'>Fără apeluri directe detectate în codebase.</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("Aceste componente apelează fizic codul modificat. Orice schimbare a semnăturii sau a rezultatului returnat va sparge compilarea direct în aceste locuri:")
+                        for caller in direct_callers:
+                            caller_chunk = by_name.get(caller, {})
+                            c_fpath = caller_chunk.get("file_path", "?")
+                            c_sl = caller_chunk.get("start_line", 0)
+                            st.markdown(f"- **`{caller}`** &nbsp;·&nbsp; `📂 {c_fpath}:{c_sl}` &nbsp; (risc: **100% de regresie directă**)")
+                            
+                    st.write("---")
+                    
+                    # --- Nivel 2: Risc Mediu ---
+                    st.markdown("#### 🟡 Componente Corelate Semantic (Risc Mediu - CodeBERT AI)")
+                    all_sem = sorted(high_sem_correlations + medium_sem_correlations, key=lambda x: -x.get("similarity", 0.0))
+                    
+                    if not all_sem:
+                        st.markdown("<span style='color:#94a3b8; font-size:0.9em; font-style:italic;'>Fără corelații semantice semnificative în restul codebase-ului.</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("Aceste componente au fost detectate de modelul **CodeBERT** ca fiind strâns corelate la nivel logic (implementează algoritmi similari sau operează pe date similare), chiar dacă nu se apelează direct. Revizuiește-le pentru a asigura consistența arhitecturală:")
+                        for c in all_sem:
+                            c_name = c.get("name", "?")
+                            c_similarity = c.get("similarity", 0.0)
+                            c_fpath = c.get("file_path", "?")
+                            c_sl = c.get("start_line", 0)
+                            badge_color = "#ef4444" if c_similarity > 0.80 else "#f59e0b"
+                            st.markdown(f"""
+                            <div style="padding:10px; border-radius:6px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); margin-bottom:8px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <b><code>{c_name}</code></b>
+                                    <span style="background:{badge_color}22; color:{badge_color}; padding:2px 8px; border-radius:12px; font-size:0.75em; font-weight:bold;">Similaritate: {c_similarity:.1%}</span>
+                                </div>
+                                <div style="font-size:0.8em; color:#94a3b8; margin-top:4px;">
+                                    Cale fișier: <code>{c_fpath}:{c_sl}</code> · Tip: <code>{c.get('type','?')}</code>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                    st.write("---")
+                    
+                    # --- Nivel 3: Risc Scăzut ---
+                    st.markdown("#### 🟢 Componente Independente (Risc Scăzut)")
+                    independent_count = len(all_elements) - len(direct_callers) - len(all_sem) - 1
+                    st.markdown(f"Un număr de **{independent_count}** alte clase și funcții din codebase sunt complet izolate logic de `{selected_el}`, prezentând risc **0%** de regresie.")
