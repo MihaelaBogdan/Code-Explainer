@@ -3463,26 +3463,71 @@ with st.sidebar:
     st.markdown("### Încărcare Proiect")
     uploaded_file = st.file_uploader("Încarcă o arhivă .zip sau un fișier individual de cod", type=None)
     
+    st.write("---")
+    st.markdown("### 🔗 Încarcă de pe Git / GitHub")
+    git_url = st.text_input("Introdu URL-ul repository-ului Git:", placeholder="https://github.com/username/repo.git")
+    if st.button("Clonează și Indexează de pe Git", use_container_width=True):
+        if git_url:
+            st.session_state.git_clone_url = git_url
+            st.session_state.project_processed = False
+            st.rerun()
+            
+    st.write("---")
+    
     # Buton de Reset
     if st.button("Șterge datele / Încarcă alt proiect", use_container_width=True):
         clean_workspace()
         st.rerun()
 
 # ----------------- PROCESARE COD & EMBEDDINGS -----------------
-if uploaded_file is not None and not st.session_state.project_processed:
+git_clone_requested = "git_clone_url" in st.session_state and st.session_state.git_clone_url is not None
+
+if (uploaded_file is not None or git_clone_requested) and not st.session_state.project_processed:
     clean_workspace()
-    file_name = uploaded_file.name
+    success = True
     
-    if file_name.lower().endswith(".zip"):
-        with st.spinner("Se extrage arhiva proiectului..."):
-            zip_bytes = uploaded_file.read()
-            unzip_project(zip_bytes, TEMP_DIR)
+    if git_clone_requested:
+        url = st.session_state.git_clone_url
+        with st.spinner(f"Se clonează repository-ul de pe Git: {url}..."):
+            try:
+                import subprocess
+                import shutil
+                if os.path.exists(TEMP_DIR):
+                    shutil.rmtree(TEMP_DIR, ignore_errors=True)
+                os.makedirs(TEMP_DIR, exist_ok=True)
+                
+                # Rulăm comanda git clone --depth 1 pentru viteză maximă de descărcare
+                res = subprocess.run(
+                    ["git", "clone", "--depth", "1", url, TEMP_DIR],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=90
+                )
+                if res.returncode != 0:
+                    st.error(f"Eroare la clonarea Git: {res.stderr or 'Repository privat sau cale incorectă'}")
+                    success = False
+            except Exception as e:
+                st.error(f"Eroare internă la clonare: {str(e)}")
+                success = False
+            finally:
+                # Resetăm starea de cerere de clonare din starea sesiunii
+                st.session_state.git_clone_url = None
     else:
-        with st.spinner(f"Se procesează fișierul {file_name}..."):
-            os.makedirs(TEMP_DIR, exist_ok=True)
-            file_path = os.path.join(TEMP_DIR, file_name)
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.read())
+        file_name = uploaded_file.name
+        if file_name.lower().endswith(".zip"):
+            with st.spinner("Se extrage arhiva proiectului..."):
+                zip_bytes = uploaded_file.read()
+                unzip_project(zip_bytes, TEMP_DIR)
+        else:
+            with st.spinner(f"Se procesează fișierul {file_name}..."):
+                os.makedirs(TEMP_DIR, exist_ok=True)
+                file_path = os.path.join(TEMP_DIR, file_name)
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.read())
+                    
+    if not success:
+        st.stop()
         
     # Scanare fișiere proiect
     all_files = scan_project_files(TEMP_DIR)
