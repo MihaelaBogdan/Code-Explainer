@@ -2588,51 +2588,10 @@ def generate_follow_up_questions(question, answer, kb_match=None):
     ]
 
 
-def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None, gemini_api_key=None):
+def build_chatbot_answer(question, results, all_chunks, kb=None, indexer=None):
     """Răspuns complet bazat pe KB pre-calculat + FAISS + AST + clasificare semantică prin CodeBERT."""
     import re as _re
     q   = question.lower().strip()
-
-    # ── MODUL GENERATIV GEMINI (OPTIONAL) ──────────────────────────────────
-    if gemini_api_key and gemini_api_key.strip():
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=gemini_api_key.strip())
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            
-            context_code = ""
-            found_chunks = []
-            if results:
-                for idx, chunk in enumerate(results[:4]):
-                    context_code += f"\n--- Fragmentul {idx+1} ({chunk['file_path']}, tip: {chunk['type']}, linii {chunk['start_line']}-{chunk['end_line']}) ---\n{chunk['content']}\n"
-                    found_chunks.append(chunk)
-            
-            prompt = f"""Ești 'Antigravity', un asistent AI de programare inteligent creat de echipa Google DeepMind.
-Misiunea ta este să analizezi proiectul utilizatorului și să răspunzi precis, tehnic, clar și EXCLUSIV în limba română.
-
-Iată contextul relevant extras local din codebase-ul utilizatorului prin indexarea semantică CodeBERT:
-{context_code}
-
-Întrebarea utilizatorului este:
-"{question}"
-
-Te rog să formulezi un răspuns complet, prietenos și structurat academic în limba română. 
-- Referă-te direct la fișierele reale, clasele sau funcțiile din context.
-- Explică logic ce se întâmplă și oferă exemple de cod curate acolo unde este relevant.
-- Dacă întrebarea este generală sau teoretică, folosește-te de cunoștințele tale avansate de programare pentru a oferi cea mai bună explicație în română.
-"""
-            response = model.generate_content(prompt)
-            answer_text = response.text
-            
-            analysis_box = f"""<div style="padding: 10px 14px; font-size: 0.9em; border-radius: 6px; background: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; margin-bottom: 15px; color: #e2e8f0; font-family: sans-serif;">
-🤖 <b>[Motor Generativ Gemini AI Activat]</b> Răspuns sintetizat prin modelul de limbaj generativ bazat pe contextul local CodeBERT.
-</div>
-
-"""
-            return analysis_box + answer_text, found_chunks, None
-        except Exception as ex:
-            import streamlit as st
-            st.error(f"Eroare API Gemini (se folosește fallback-ul local): {str(ex)}")
     kb  = kb or {}
     by_name   = kb.get("by_name", {})
     called_by = kb.get("called_by", {})
@@ -3635,22 +3594,6 @@ with st.sidebar:
     device_label = "Apple Silicon (MPS)" if "mps" in str(DEVICE).lower() else "GPU (CUDA)" if "cuda" in str(DEVICE).lower() else "CPU local"
     st.markdown(f"**Dispozitiv Transformer:**\n`{device_label}`")
     
-    st.write("---")
-    
-    # Activator generativ Gemini
-    st.markdown("### 🚀 Generative AI (Gemini)")
-    gemini_key = st.text_input(
-        "Cheie API Gemini (Opțional):",
-        type="password",
-        placeholder="AIzaSy...",
-        key="gemini_api_key",
-        help="Introduceți o cheie API Gemini gratuită de pe Google AI Studio pentru a activa răspunsuri generative excepționale."
-    )
-    if gemini_key:
-        st.success("🤖 Motor Generativ Activ!")
-    else:
-        st.info("💡 Se folosește CodeBERT local.")
-        
     st.write("---")
     
     # Alegere Model Transformer (Wow and customizability feature)
@@ -4889,10 +4832,7 @@ def {n2}({args2 or 'data'}):
 
                             kb = st.session_state.project_kb
                             results = indexer.search(active_q, top_k=5)
-                            gemini_api_key = st.session_state.get("gemini_api_key", None)
-                            answer, found_chunks, kb_match = build_chatbot_answer(
-                                active_q, results, all_chunks, kb=kb, indexer=indexer, gemini_api_key=gemini_api_key
-                            )
+                            answer, found_chunks, kb_match = build_chatbot_answer(active_q, results, all_chunks, kb=kb, indexer=indexer)
 
                             st.markdown(answer, unsafe_allow_html=True)
 
