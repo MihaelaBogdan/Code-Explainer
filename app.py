@@ -3372,22 +3372,94 @@ def render_mermaid(mermaid_code, height=500):
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body, html {{
       width: 100%; height: 100%;
-      background: #ffffff;
+      background: #f8fafc;
       font-family: ui-monospace, monospace;
+      overflow: hidden;
+      user-select: none;
     }}
     #wrap {{
       width: 100%; height: 100%;
-      display: flex; justify-content: center; align-items: flex-start;
-      padding: 8px;
-      overflow: auto;
+      position: relative;
+      overflow: hidden;
+      cursor: grab;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }}
-    #diagram {{ max-width: 100%; }}
-    svg {{ max-width: 100% !important; height: auto !important; display: block; }}
+    #wrap:active {{
+      cursor: grabbing;
+    }}
+    #diagram {{
+      transform-origin: center center;
+      transition: transform 0.08s ease-out;
+      display: inline-block;
+    }}
+    #diagram svg {{
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      display: block;
+    }}
+    #controls {{
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 6px 10px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    }}
+    .btn {{
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background 0.2s, transform 0.1s;
+    }}
+    .btn:hover {{
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(1.1);
+    }}
+    .btn:active {{
+      transform: scale(0.9);
+    }}
+    .divider {{
+      width: 1px;
+      height: 16px;
+      background: rgba(255, 255, 255, 0.2);
+      margin: 0 4px;
+    }}
+    .info-tag {{
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 11px;
+      padding-right: 4px;
+      pointer-events: none;
+    }}
     #err {{
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
       color: #dc2626; background: #fef2f2;
       border: 1px solid #fca5a5; border-radius: 6px;
       padding: 12px 16px; font-size: 13px;
       display: none;
+      z-index: 101;
     }}
   </style>
 </head>
@@ -3395,6 +3467,13 @@ def render_mermaid(mermaid_code, height=500):
   <div id="wrap">
     <div id="diagram">Se încarcă diagrama...</div>
     <div id="err"></div>
+    <div id="controls">
+      <span class="info-tag">Drag & Wheel</span>
+      <div class="divider"></div>
+      <button class="btn" id="zoom-out" title="Zoom Out">−</button>
+      <button class="btn" id="zoom-reset" title="Reset Zoom">⟲</button>
+      <button class="btn" id="zoom-in" title="Zoom In">+</button>
+    </div>
   </div>
   <script id="src" type="text/plain">{escaped}</script>
   <script type="module">
@@ -3409,9 +3488,91 @@ def render_mermaid(mermaid_code, height=500):
     const code = document.getElementById('src').textContent.trim();
     const box  = document.getElementById('diagram');
     const err  = document.getElementById('err');
+    
     try {{
       const {{ svg }} = await mermaid.render('mmd', code);
       box.innerHTML = svg;
+      
+      const svgEl = box.querySelector('svg');
+      if (svgEl) {{
+        const viewBox = svgEl.getAttribute('viewBox');
+        if (viewBox) {{
+          const parts = viewBox.split(' ');
+          const w = parseFloat(parts[2]);
+          const h = parseFloat(parts[3]);
+          if (!isNaN(w) && !isNaN(h)) {{
+            box.style.width = w + 'px';
+            box.style.height = h + 'px';
+          }}
+        }}
+      }}
+      
+      // Inițializare pan & zoom interactiv
+      let scale = 1.0;
+      let translateX = 0;
+      let translateY = 0;
+      let isDragging = false;
+      let startX = 0, startY = 0;
+
+      const wrap = document.getElementById('wrap');
+
+      function updateTransform() {{
+        box.style.transform = "translate(" + translateX + "px, " + translateY + "px) scale(" + scale + ")";
+      }}
+
+      document.getElementById('zoom-in').addEventListener('click', (e) => {{
+        e.stopPropagation();
+        scale = Math.min(scale * 1.25, 4.0);
+        updateTransform();
+      }});
+
+      document.getElementById('zoom-out').addEventListener('click', (e) => {{
+        e.stopPropagation();
+        scale = Math.max(scale / 1.25, 0.25);
+        updateTransform();
+      }});
+
+      document.getElementById('zoom-reset').addEventListener('click', (e) => {{
+        e.stopPropagation();
+        scale = 1.0;
+        translateX = 0;
+        translateY = 0;
+        updateTransform();
+      }});
+
+      // Drag to Pan
+      wrap.addEventListener('mousedown', (e) => {{
+        if (e.target.closest('#controls')) return;
+        isDragging = true;
+        startX = e.clientX - translateX;
+        startY = e.clientY - translateY;
+        wrap.style.cursor = 'grabbing';
+      }});
+
+      window.addEventListener('mousemove', (e) => {{
+        if (!isDragging) return;
+        translateX = e.clientX - startX;
+        translateY = e.clientY - startY;
+        updateTransform();
+      }});
+
+      window.addEventListener('mouseup', () => {{
+        isDragging = false;
+        wrap.style.cursor = 'grab';
+      }});
+
+      // Mouse Wheel Zoom
+      wrap.addEventListener('wheel', (e) => {{
+        e.preventDefault();
+        const zoomFactor = 1.08;
+        if (e.deltaY < 0) {{
+          scale = Math.min(scale * zoomFactor, 4.0);
+        }} else {{
+          scale = Math.max(scale / zoomFactor, 0.25);
+        }}
+        updateTransform();
+      }}, {{ passive: false }});
+
     }} catch(e) {{
       box.innerHTML = '';
       err.style.display = 'block';
