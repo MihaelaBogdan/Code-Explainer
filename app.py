@@ -572,12 +572,20 @@ def render_mermaid(mermaid_code, height=500):
             overflow: hidden;
           }}
 
+        .messageText {{
+            fill: #f9fafb !important;
+            color: #f9fafb !important;
+            font-weight: 600 !important;
+        }}
+          
           #diagram-container {{
           width: 100%;
           height: 100%;
           display: block;
           overflow: visible;
 }}
+
+
 
           svg {{
             width: 100% !important;
@@ -594,7 +602,68 @@ def render_mermaid(mermaid_code, height=500):
           mermaid.initialize({{
             startOnLoad: false,
             theme: 'base',
-            securityLevel: 'loose'
+            securityLevel: 'loose',
+          
+            themeVariables: {{
+              background: '#ffffff',
+          
+              primaryColor: '#f3f4f6',
+              primaryBorderColor: '#111827',
+              primaryTextColor: '#111827',
+          
+              secondaryColor: '#e5e7eb',
+              secondaryBorderColor: '#111827',
+              secondaryTextColor: '#111827',
+          
+              tertiaryColor: '#ffffff',
+              tertiaryBorderColor: '#111827',
+              tertiaryTextColor: '#111827',
+          
+              lineColor: '#2563eb',
+              textColor: '#111827',
+          
+              mainBkg: '#ffffff',
+              secondBkg: '#f9fafb',
+          
+              clusterBkg: '#f3f4f6',
+              clusterBorder: '#374151',
+          
+              edgeLabelBackground: '#ffffff',
+          
+              nodeBorder: '#111827',
+              defaultLinkColor: '#2563eb',
+          
+              fontFamily: 'ui-monospace, monospace',
+          
+              /* ===== SEQUENCE DIAGRAM ===== */
+          
+              actorBorder: '#111827',
+              actorBkg: '#f3f4f6',
+              actorTextColor: '#111827',
+              actorLineColor: '#6b7280',
+          
+              signalColor: '#2563eb',
+              signalTextColor: '#111827',
+          
+              labelBoxBkgColor: '#ffffff',
+              labelBoxBorderColor: '#111827',
+              labelTextColor: '#111827',
+          
+              activationBorderColor: '#2563eb',
+              activationBkgColor: '#dbeafe',
+          
+              sequenceNumberColor: '#111827',
+          
+              loopTextColor: '#111827',
+              noteTextColor: '#111827',
+          
+              noteBkgColor: '#fef3c7',
+              noteBorderColor: '#d97706',
+          
+              sequenceDividerColor: '#374151',
+              sequenceDividerBorderColor: '#111827',
+              sequenceDividerTextColor: '#111827'
+            }}
           }});
 
           async function initDiagram() {{
@@ -615,6 +684,20 @@ def render_mermaid(mermaid_code, height=500):
               ;
 
               const svg = container.querySelector('svg');
+
+              svg.querySelectorAll("line, path").forEach(el => {{
+                    el.style.stroke = "#94a3b8";
+                }});
+                
+                svg.querySelectorAll(".messageLine0, .messageLine1").forEach(el => {{
+                    el.style.stroke = "#2563eb";
+                    el.style.strokeWidth = "2.5px";
+                }});
+                
+                svg.querySelectorAll(".actor-line").forEach(el => {{
+                    el.style.stroke = "#94a3b8";
+                    el.style.strokeWidth = "2px";
+                }});
               
               await new Promise(requestAnimationFrame);
               await new Promise(requestAnimationFrame);
