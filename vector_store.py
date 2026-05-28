@@ -33,9 +33,10 @@ class CodeBERTIndexer:
         if self.model is None:
             # Descarcă/încarcă modelul specificat de la Hugging Face
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModel.from_pretrained(self.model_name)
+            self.model = AutoModel.from_pretrained(self.model_name, attn_implementation="eager")
             self.model.to(DEVICE)
             self.model.eval() # Punem modelul în modul de evaluare (fără dropout)
+            print('-----------------------' + str(self.model.config) + '-----------------------') #Afoisăm configurația modelului pentru debug
 
     def tokenize(self, text):
         """
@@ -63,15 +64,25 @@ class CodeBERTIndexer:
         
         with torch.no_grad():
             # Rulăm modelul solicitând matricea de atenție
-            outputs = self.model(**inputs, output_attentions=True)
+            outputs = self.model(**inputs, output_attentions=True, return_dict=True)
             
             # Verificăm dacă atenția este disponibilă în output (pentru unele configurări)
+            #if hasattr(outputs, 'attentions') and outputs.attentions is not None and len(outputs.attentions) > 0:
             if hasattr(outputs, 'attentions') and outputs.attentions is not None:
                 # outputs.attentions este un tuplu de 12 tensori de formă (batch_size, num_heads, seq_len, seq_len)
                 # Extragem ultimul strat al Transformerului și primul element din batch
                 last_layer_attention = outputs.attentions[-1][0]
                 # Calculăm media ponderată pe toate cele 12 capete de atenție
                 avg_attention = torch.mean(last_layer_attention, dim=0)
+                print("-----------------TOKENS:-------------------")
+                print(tokens)
+
+                print("------------ATTENTION SHAPE:---------------")
+                print(avg_attention.shape)
+
+                print("------------ATTENTION MATRIX:---------------")
+                print(avg_attention.cpu().numpy())
+
                 return tokens, avg_attention.cpu().numpy()
             else:
                 # Fallback în caz că nu e disponibilă
@@ -150,10 +161,13 @@ class CodeBERTIndexer:
         all_embeddings = np.vstack(embeddings).astype('float32')
         
         # Dimensiunea modelului CodeBERT este de 768 dimensiuni
+        faiss.normalize_L2(all_embeddings)
+
         dimension = all_embeddings.shape[1]
         
-        # Creăm indexul FAISS L2 (L2 distance)
-        self.index = faiss.IndexFlatL2(dimension)
+        # Creăm indexul FAISS bazat pe similaritate cosinus
+        #self.index = faiss.IndexFlatL2(dimension)
+        self.index = faiss.IndexFlatIP(dimension)
         self.index.add(all_embeddings)
 
     def save_index(self, save_dir):
@@ -198,15 +212,16 @@ class CodeBERTIndexer:
             
         # Generăm embedding-ul pentru întrebare
         query_vector = self.get_embeddings([query]).astype('float32')
+        faiss.normalize_L2(query_vector)
         
         # Căutăm în FAISS
-        distances, indices = self.index.search(query_vector, top_k)
+        similarities, indices = self.index.search(query_vector, top_k)
         
         results = []
         for i, idx in enumerate(indices[0]):
             if idx != -1 and idx < len(self.chunks):
                 chunk = self.chunks[idx].copy()
-                chunk["score"] = float(distances[0][i])
+                chunk["score"] = float(similarities[0][i])
                 results.append(chunk)
                 
         return results

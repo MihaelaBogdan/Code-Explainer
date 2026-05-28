@@ -5,6 +5,8 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import streamlit as st
 import streamlit.components.v1 as components
 import shutil
+import torch
+torch.classes.__path__ = [] 
 import pickle
 import traceback
 import numpy as np
@@ -26,6 +28,7 @@ from code_parser import (
 )
 from vector_store import CodeBERTIndexer, DEVICE
 from security_analyzer import analyze_python_file
+import traceback
 
 # Configurare pagină Streamlit
 st.set_page_config(
@@ -547,65 +550,190 @@ def clean_workspace():
     st.session_state.analysis_smells = None
 
 def render_mermaid(mermaid_code, height=500):
-    escaped = mermaid_code.replace("`", "\\`").replace("${", "\\${")
-    html_code = f"""<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body, html {{
-      width: 100%; height: 100%;
-      background: #ffffff;
-      font-family: ui-monospace, monospace;
-    }}
-    #wrap {{
-      width: 100%; height: 100%;
-      display: flex; justify-content: center; align-items: flex-start;
-      padding: 8px;
-      overflow: auto;
-    }}
-    #diagram {{ max-width: 100%; }}
-    svg {{ max-width: 100% !important; height: auto !important; display: block; }}
-    #err {{
-      color: #dc2626; background: #fef2f2;
-      border: 1px solid #fca5a5; border-radius: 6px;
-      padding: 12px 16px; font-size: 13px;
-      display: none;
-    }}
-  </style>
-</head>
-<body>
-  <div id="wrap">
-    <div id="diagram">Se încarcă diagrama...</div>
-    <div id="err"></div>
-  </div>
-  <script id="src" type="text/plain">{escaped}</script>
-  <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({{
-      startOnLoad: false,
-      theme: 'default',
-      securityLevel: 'loose',
-      fontFamily: 'ui-monospace, monospace',
-      fontSize: 14
-    }});
-    const code = document.getElementById('src').textContent.trim();
-    const box  = document.getElementById('diagram');
-    const err  = document.getElementById('err');
-    try {{
-      const {{ svg }} = await mermaid.render('mmd', code);
-      box.innerHTML = svg;
-    }} catch(e) {{
-      box.innerHTML = '';
-      err.style.display = 'block';
-      err.textContent = 'Eroare sintaxă Mermaid: ' + e.message;
-      console.error(e);
-    }}
-  </script>
-</body>
-</html>"""
-    components.html(html_code, height=height, scrolling=True)
+    """
+    Randează un diagramă Mermaid.js într-un iframe Streamlit,
+    cu zoom + pan custom (fără svg-pan-zoom, stabil și fără erori SVGMatrix).
+    """
+
+    escaped_code = mermaid_code.replace("`", "\\`").replace("${", "\\${")
+
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body, html {{
+            background-color: #0d1117;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+          }}
+
+          #diagram-container {{
+          width: 100%;
+          height: 100%;
+          display: block;
+          overflow: visible;
+}}
+
+          svg {{
+            width: 100% !important;
+            height: 100% !important;
+            max-width: none;
+            transform-origin: center;
+            user-select: none;
+          }}
+        </style>
+
+        <script type="module">
+          import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+
+          mermaid.initialize({{
+            startOnLoad: false,
+            theme: 'base',
+            securityLevel: 'loose'
+          }});
+
+          async function initDiagram() {{
+            try {{
+              const container = document.getElementById('diagram-container');
+              const code = document.getElementById('mermaid-data').textContent;
+
+              console.log("MERMAID CODE:");
+              console.log(code);
+
+              const result = await mermaid.render('mermaid-svg', code);
+
+              console.log("MERMAID RESULT:");
+              console.log(result);
+
+              container.innerHTML = result.svg;
+
+              ;
+
+              const svg = container.querySelector('svg');
+              
+              await new Promise(requestAnimationFrame);
+              await new Promise(requestAnimationFrame);
+              requestAnimationFrame(() => {{
+                  requestAnimationFrame(() => {{
+                
+                    const realSvg = container.querySelector("svg");
+
+                    const bbox = realSvg.getBBox();
+                    console.log("REAL bbox:", bbox);
+
+                    if (!bbox.width || !bbox.height) {{
+                      console.warn("Still not ready, retrying...");
+                      setTimeout(initDiagram, 50);
+                      return;
+                    }}
+
+                    realSvg.setAttribute(
+                      "viewBox",
+                      `${{bbox.x - 10}} ${{ bbox.y - 10 }} ${{ bbox.width + 20 }} $${{ bbox.height + 20 }}`
+                    );
+
+                  }});
+              }});
+              
+              console.log("SVG INJECTED");
+              console.log("SVG ELEMENT:");
+              console.log(svg);
+
+              if (!svg) {{
+                throw new Error("SVG-ul Mermaid nu a fost generat.");
+              }}
+
+              // styling stabil
+              svg.style.width = '100%';
+              svg.style.height = '100%';
+              svg.style.maxWidth = 'none';
+              svg.style.transformOrigin = 'center';
+
+              let scale = 1;
+              let panX = 0;
+              let panY = 0;
+
+              let dragging = false;
+              let startX = 0;
+              let startY = 0;
+
+              function applyTransform() {{
+                svg.style.transform =
+                  `translate(${{panX}}px, ${{panY}}px) scale(${{scale}})`;
+              }}
+
+              // 🔥 ZOOM
+              container.addEventListener('wheel', (e) => {{
+                e.preventDefault();
+
+                const zoomStep = 0.1;
+                const direction = e.deltaY > 0 ? -1 : 1;
+
+                scale = Math.min(10, Math.max(0.2, scale + direction * zoomStep));
+
+                applyTransform();
+              }}, {{ passive: false }});
+
+              // 🔥 PAN START
+              container.addEventListener('mousedown', (e) => {{
+                dragging = true;
+                startX = e.clientX - panX;
+                startY = e.clientY - panY;
+                container.style.cursor = 'grabbing';
+              }});
+
+              container.addEventListener('mousemove', (e) => {{
+                if (!dragging) return;
+
+                panX = e.clientX - startX;
+                panY = e.clientY - startY;
+
+                applyTransform();
+              }});
+
+              container.addEventListener('mouseup', () => {{
+                dragging = false;
+                container.style.cursor = 'grab';
+              }});
+
+              container.addEventListener('mouseleave', () => {{
+                dragging = false;
+                container.style.cursor = 'grab';
+              }});
+
+            }} catch (error) {{
+              console.error(error);
+              console.error("MERMAID ERROR:", error);
+
+              document.getElementById('diagram-container').innerHTML =
+                `<div style="color:#ef4444;font-family:sans-serif;padding:20px;">
+                  Eroare randare diagramă: ${{{{error}}}}
+                </div>`;
+            }}
+          }}
+
+          window.addEventListener('load', initDiagram);
+        </script>
+      </head>
+
+      <body>
+        <div id="diagram-container">
+          <div style="color:#94a3b8;font-family:sans-serif;margin-top:20%;">
+            Se randează diagrama...
+          </div>
+        </div>
+
+        <script id="mermaid-data" type="text/plain">{escaped_code}</script>
+      </body>
+    </html>
+    """
+
+    components.html(html_code, height=height, scrolling=False)
 
 # ----------------- SIDEBAR -----------------
 with st.sidebar:
@@ -661,6 +789,18 @@ if uploaded_file is not None and not st.session_state.project_processed:
         
     # Scanare fișiere proiect
     all_files = scan_project_files(TEMP_DIR)
+    
+    security_findings = []
+
+    for file in all_files:
+
+        if file.suffix.lower() == ".py":
+
+            findings = analyze_python_file(file, TEMP_DIR, indexer=st.session_state.indexer)
+
+            security_findings.extend(findings)
+
+    st.session_state.security_findings = security_findings
     
     if not all_files:
         st.error("Nu s-au găsit fișiere de cod acceptate în arhivă!")
@@ -757,7 +897,7 @@ if not st.session_state.project_processed:
         st.markdown("""
         <div class="glass-card" style="text-align: center; height: 180px;">
             <h3>Căutare Semantică FAISS</h3>
-            <p>Interogare instantanee în cod pe bază de concepte, nu doar cuvinte cheie rigide, folosind indexarea similarității L2.</p>
+            <p>Interogare instantanee în cod pe bază de concepte, nu doar cuvinte cheie rigide, folosind indexarea similarității cosine.</p>
         </div>
         """, unsafe_allow_html=True)
     with col3:
@@ -992,7 +1132,7 @@ else:
                         <div class="glass-card" style="margin-bottom: 20px;">
                             <h4 style="margin: 0; color: #38bdf8; display: flex; justify-content: space-between;">
                                 <span>[{idx+1}] Fișier: {chunk['file_path']}</span>
-                                <span style="font-size: 0.8em; color: #8b5cf6;">Relevanță Scenariu (L2 dist): {chunk['score']:.4f}</span>
+                                <span style="font-size: 0.8em; color: #8b5cf6;">Similaritate Scenariu (Cosine): {chunk['score']:.4f}</span>
                             </h4>
                             <div style="margin: 10px 0;">
                                 <span class="custom-badge custom-badge-green"><b>Tip fragment:</b> {chunk_type_label}</span>
@@ -1045,17 +1185,21 @@ else:
                         att_tokens, att_matrix = indexer.get_attention_matrix(code_input)
                         att_matrix = np.array(att_matrix)
 
-                        # Normalizare shape: dacă e 4D (batch, heads, seq, seq) sau 3D
+                        st.write("Attention shape:", att_matrix.shape)
+
                         if len(att_matrix.shape) == 4:
                             att_matrix = att_matrix[-1][0]
+
                         elif len(att_matrix.shape) == 3:
                             att_matrix = att_matrix[0]
+
                         if len(att_matrix.shape) != 2:
-                            st.error(f"Format atenție invalid: {att_matrix.shape}")
+                            st.error(f"Format attention invalid: {att_matrix.shape}")
                             st.stop()
-
+                        
                         import matplotlib.pyplot as plt
-
+                        
+                        
                         # Curățăm tokenii pentru o afișare mai lizibilă în grafic
                         display_tokens = [t.replace('Ġ', ' ').replace('Ċ', ' \\n') for t in att_tokens]
                         
@@ -1096,14 +1240,16 @@ else:
                         * Culorile luminoase (galben, portocaliu) indică o atenție puternică, în timp ce culorile închise (albastru, violet) reprezintă o corelație redusă.
                         * Acest comportament demonstrează capacitatea nativă a arhitecturii **Transformer** de a asocia contextul global fără a fi limitată de distanța dintre tokeni, spre deosebire de rețelele RNN sau LSTM.
                         """)
+                    
                     except Exception as e:
                         st.error(f"Nu s-a putut genera harta de atenție: {str(e)}")
-                        st.code(traceback.format_exc(), language="text")
+                        st.error("Detalii eroare:")
+                        st.text(traceback.format_exc())
             else:
                 st.info("Apăsați butonul 'Generează Harta de Atenție' de mai sus pentru a vizualiza rețeaua.")
-
-    # ----------------- TAB 4: SECURITATE -----------------
+    # ----------------- TAB 4: ANALIZĂ DE SECURITATE -----------------
     with tab4:
+
         st.markdown("## Security Audit — Analiză Statică AST + Validare Semantică CodeBERT")
         st.markdown("Auditorul scanează toate fișierele Python prin **analiza AST** pentru pattern-uri de vulnerabilitate cunoscute, apoi validează fiecare găsire cu **CodeBERT** prin similaritate cosinus față de exemple de cod nesigur.")
         st.write("---")
