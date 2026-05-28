@@ -2,221 +2,221 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 /* Reguli generale de resetare și font principal */
-html, body, [class*="css"], .stApp {
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
+html, body, [class*="css"],.stApp {
+ font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 
 /* Efect de fundal Glowing Space Aura pe starea generală a aplicației */
 .stApp::before {
-    content: "";
-    position: fixed;
-    top: -10%;
-    left: -10%;
-    width: 120%;
-    height: 120%;
-    background: radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
-                radial-gradient(circle at 85% 85%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
-                radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.02) 0%, transparent 40%);
-    z-index: -1;
-    pointer-events: none;
+ content: "";
+ position: fixed;
+ top: -10%;
+ left: -10%;
+ width: 120%;
+ height: 120%;
+ background: radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
+ radial-gradient(circle at 85% 85%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+ radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.02) 0%, transparent 40%);
+ z-index: -1;
+ pointer-events: none;
 }
 
 /* Stiluri pentru Sidebar - aspect fluid, curat și integrat */
 [data-testid="stSidebar"] {
-    background-color: #0b0f17 !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+ background-color: #0b0f17 !important;
+ border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
 /* Custom premium tabs design - le transformăm în butoane high-tech cu tranziții fine */
 button[data-baseweb="tab"] {
-    font-size: 0.92em !important;
-    font-weight: 600 !important;
-    color: #94a3b8 !important;
-    background: rgba(15, 23, 42, 0.15) !important;
-    border: 1px solid rgba(255, 255, 255, 0.03) !important;
-    border-radius: 8px 8px 0 0 !important;
-    padding: 10px 20px !important;
-    margin-right: 6px !important;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+ font-size: 0.92em !important;
+ font-weight: 600 !important;
+ color: #94a3b8 !important;
+ background: rgba(15, 23, 42, 0.15) !important;
+ border: 1px solid rgba(255, 255, 255, 0.03) !important;
+ border-radius: 8px 8px 0 0 !important;
+ padding: 10px 20px !important;
+ margin-right: 6px !important;
+ transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 button[data-baseweb="tab"]:hover {
-    color: #38bdf8 !important;
-    background: rgba(56, 189, 248, 0.05) !important;
-    border-color: rgba(56, 189, 248, 0.2) !important;
+ color: #38bdf8 !important;
+ background: rgba(56, 189, 248, 0.05) !important;
+ border-color: rgba(56, 189, 248, 0.2) !important;
 }
 
 button[data-baseweb="tab"][aria-selected="true"] {
-    color: #38bdf8 !important;
-    background: rgba(139, 92, 246, 0.08) !important;
-    border-bottom: 3px solid #8b5cf6 !important;
-    border-color: rgba(139, 92, 246, 0.25) rgba(139, 92, 246, 0.25) transparent rgba(139, 92, 246, 0.25) !important;
-    box-shadow: 0 -4px 12px rgba(139, 92, 246, 0.12) !important;
-    transform: translateY(-1px);
+ color: #38bdf8 !important;
+ background: rgba(139, 92, 246, 0.08) !important;
+ border-bottom: 3px solid #8b5cf6 !important;
+ border-color: rgba(139, 92, 246, 0.25) rgba(139, 92, 246, 0.25) transparent rgba(139, 92, 246, 0.25) !important;
+ box-shadow: 0 -4px 12px rgba(139, 92, 246, 0.12) !important;
+ transform: translateY(-1px);
 }
 
 /* Efect de Glassmorphism avansat pentru Carduri și Metrici */
-div.stMetric, div.stAlert, .glass-card {
-    background: linear-gradient(135deg, rgba(22, 27, 34, 0.7) 0%, rgba(13, 17, 23, 0.7) 100%) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    border-radius: 14px !important;
-    padding: 20px !important;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
-    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+div.stMetric, div.stAlert,.glass-card {
+ background: linear-gradient(135deg, rgba(22, 27, 34, 0.7) 0%, rgba(13, 17, 23, 0.7) 100%) !important;
+ backdrop-filter: blur(16px) !important;
+ -webkit-backdrop-filter: blur(16px) !important;
+ border: 1px solid rgba(255, 255, 255, 0.06) !important;
+ border-radius: 14px !important;
+ padding: 20px !important;
+ box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
+ transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-div.stMetric:hover, .glass-card:hover {
-    border-color: rgba(139, 92, 246, 0.35) !important;
-    box-shadow: 0 12px 30px rgba(139, 92, 246, 0.18) !important;
-    transform: translateY(-4px) scale(1.005) !important;
+div.stMetric:hover,.glass-card:hover {
+ border-color: rgba(139, 92, 246, 0.35) !important;
+ box-shadow: 0 12px 30px rgba(139, 92, 246, 0.18) !important;
+ transform: translateY(-4px) scale(1.005) !important;
 }
 
 /* Stiluri pentru blocurile de afișare Cod Sursă - aspect curat cu accente fine */
 div[data-testid="stCodeBlock"] {
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    border-radius: 10px !important;
-    background-color: rgba(15, 23, 42, 0.5) !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
-    transition: all 0.3s ease !important;
+ border: 1px solid rgba(255, 255, 255, 0.06) !important;
+ border-radius: 10px !important;
+ background-color: rgba(15, 23, 42, 0.5) !important;
+ box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
+ transition: all 0.3s ease !important;
 }
 
 div[data-testid="stCodeBlock"]:hover {
-    border-color: rgba(56, 189, 248, 0.25) !important;
-    box-shadow: 0 4px 20px rgba(56, 189, 248, 0.08) !important;
+ border-color: rgba(56, 189, 248, 0.25) !important;
+ box-shadow: 0 4px 20px rgba(56, 189, 248, 0.08) !important;
 }
 
 /* Stiluri premium pentru Badge-uri de limbi de programare și statistici */
 .custom-badge {
-    background-color: #161b22;
-    color: #c9d1d9;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 4px 14px;
-    font-size: 0.82em;
-    font-weight: 600;
-    display: inline-block;
-    margin: 4px;
-    transition: all 0.2s ease;
+ background-color: #161b22;
+ color: #c9d1d9;
+ border: 1px solid rgba(255, 255, 255, 0.08);
+ border-radius: 16px;
+ padding: 4px 14px;
+ font-size: 0.82em;
+ font-weight: 600;
+ display: inline-block;
+ margin: 4px;
+ transition: all 0.2s ease;
 }
 
 .custom-badge:hover {
-    border-color: #38bdf8;
-    color: #38bdf8;
+ border-color: #38bdf8;
+ color: #38bdf8;
 }
 
 .custom-badge-blue {
-    background-color: rgba(56, 189, 248, 0.08) !important;
-    color: #38bdf8 !important;
-    border: 1px solid rgba(56, 189, 248, 0.25) !important;
+ background-color: rgba(56, 189, 248, 0.08) !important;
+ color: #38bdf8 !important;
+ border: 1px solid rgba(56, 189, 248, 0.25) !important;
 }
 
 .custom-badge-green {
-    background-color: rgba(74, 222, 128, 0.08) !important;
-    color: #4ade80 !important;
-    border: 1px solid rgba(74, 222, 128, 0.25) !important;
+ background-color: rgba(74, 222, 128, 0.08) !important;
+ color: #4ade80 !important;
+ border: 1px solid rgba(74, 222, 128, 0.25) !important;
 }
 
 .custom-badge-red {
-    background-color: rgba(239, 68, 68, 0.08) !important;
-    color: #f87171 !important;
-    border: 1px solid rgba(239, 68, 68, 0.25) !important;
+ background-color: rgba(239, 68, 68, 0.08) !important;
+ color: #f87171 !important;
+ border: 1px solid rgba(239, 68, 68, 0.25) !important;
 }
 
 .custom-badge-orange {
-    background-color: rgba(245, 158, 11, 0.08) !important;
-    color: #fbbf24 !important;
-    border: 1px solid rgba(245, 158, 11, 0.25) !important;
+ background-color: rgba(245, 158, 11, 0.08) !important;
+ color: #fbbf24 !important;
+ border: 1px solid rgba(245, 158, 11, 0.25) !important;
 }
 
 .custom-badge-purple {
-    background-color: rgba(168, 85, 247, 0.08) !important;
-    color: #c084fc !important;
-    border: 1px solid rgba(168, 85, 247, 0.25) !important;
+ background-color: rgba(168, 85, 247, 0.08) !important;
+ color: #c084fc !important;
+ border: 1px solid rgba(168, 85, 247, 0.25) !important;
 }
 
 /* Arborele de fișiere - structură interactivă și elegantă */
 .file-tree-node {
-    font-family: 'Consolas', 'Courier New', Courier, monospace;
-    font-size: 0.92em;
-    margin-left: 20px;
-    padding: 4px 0;
-    border-left: 1px dashed rgba(240, 246, 252, 0.12);
-    padding-left: 14px;
+ font-family: 'Consolas', 'Courier New', Courier, monospace;
+ font-size: 0.92em;
+ margin-left: 20px;
+ padding: 4px 0;
+ border-left: 1px dashed rgba(240, 246, 252, 0.12);
+ padding-left: 14px;
 }
 
 .file-tree-folder {
-    color: #fbbf24;
-    font-weight: 600;
-    cursor: pointer;
-    user-select: none;
-    transition: color 0.2s ease;
+ color: #fbbf24;
+ font-weight: 600;
+ cursor: pointer;
+ user-select: none;
+ transition: color 0.2s ease;
 }
 .file-tree-folder:hover {
-    color: #f59e0b;
+ color: #f59e0b;
 }
 
 .file-tree-file {
-    color: #38bdf8;
-    cursor: pointer;
-    transition: color 0.2s ease;
+ color: #38bdf8;
+ cursor: pointer;
+ transition: color 0.2s ease;
 }
 
 .file-tree-file:hover {
-    color: #60a5fa;
-    text-decoration: underline;
+ color: #60a5fa;
+ text-decoration: underline;
 }
 
 /* Efect de strălucire neon (Glowing heads) pentru elemente importante */
 .neon-glow-header {
-    background: linear-gradient(135deg, #38bdf8 0%, #a855f7 50%, #f43f5e 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    margin-bottom: 24px;
-    text-shadow: 0 0 40px rgba(139, 92, 246, 0.1);
+ background: linear-gradient(135deg, #38bdf8 0%, #a855f7 50%, #f43f5e 100%);
+ -webkit-background-clip: text;
+ -webkit-text-fill-color: transparent;
+ font-weight: 800;
+ letter-spacing: -0.5px;
+ margin-bottom: 24px;
+ text-shadow: 0 0 40px rgba(139, 92, 246, 0.1);
 }
 
 /* Personalizare butoane Streamlit - animație hover cu transformare fluidă și culori gradient */
 .stButton>button {
-    background: linear-gradient(135deg, #38bdf8 0%, #8b5cf6 50%, #a855f7 100%) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    padding: 10px 24px !important;
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.25) !important;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+ background: linear-gradient(135deg, #38bdf8 0%, #8b5cf6 50%, #a855f7 100%) !important;
+ color: white !important;
+ border: none !important;
+ border-radius: 8px !important;
+ font-weight: 600 !important;
+ padding: 10px 24px !important;
+ box-shadow: 0 4px 16px rgba(139, 92, 246, 0.25) !important;
+ transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .stButton>button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.45) !important;
-    color: #ffffff !important;
+ transform: translateY(-2px) !important;
+ box-shadow: 0 8px 24px rgba(139, 92, 246, 0.45) !important;
+ color: #ffffff !important;
 }
 
 .stButton>button:active {
-    transform: translateY(1px) !important;
+ transform: translateY(1px) !important;
 }
 
 /* Subțiat scrollbar-ul global pentru un aspect extrem de curat și elegant */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+ width: 6px;
+ height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #0b0f17;
+ background: #0b0f17;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 4px;
-    transition: background 0.3s;
+ background: rgba(255, 255, 255, 0.08);
+ border-radius: 4px;
+ transition: background 0.3s;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #8b5cf6;
+ background: #8b5cf6;
 }
