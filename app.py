@@ -3461,7 +3461,7 @@ with st.sidebar:
     
     # Încărcare proiect ZIP
     st.markdown("### Încărcare Proiect")
-    uploaded_file = st.file_uploader("Încarcă o arhivă .zip a proiectului", type=["zip"])
+    uploaded_file = st.file_uploader("Încarcă o arhivă .zip sau un fișier individual de cod", type=None)
     
     # Buton de Reset
     if st.button("Șterge datele / Încarcă alt proiect", use_container_width=True):
@@ -3470,10 +3470,19 @@ with st.sidebar:
 
 # ----------------- PROCESARE COD & EMBEDDINGS -----------------
 if uploaded_file is not None and not st.session_state.project_processed:
-    with st.spinner("Se extrage arhiva proiectului..."):
-        clean_workspace()
-        zip_bytes = uploaded_file.read()
-        unzip_project(zip_bytes, TEMP_DIR)
+    clean_workspace()
+    file_name = uploaded_file.name
+    
+    if file_name.lower().endswith(".zip"):
+        with st.spinner("Se extrage arhiva proiectului..."):
+            zip_bytes = uploaded_file.read()
+            unzip_project(zip_bytes, TEMP_DIR)
+    else:
+        with st.spinner(f"Se procesează fișierul {file_name}..."):
+            os.makedirs(TEMP_DIR, exist_ok=True)
+            file_path = os.path.join(TEMP_DIR, file_name)
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.read())
         
     # Scanare fișiere proiect
     all_files = scan_project_files(TEMP_DIR)

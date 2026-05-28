@@ -56,7 +56,7 @@ ALLOWED_EXTENSIONS = {
 
 def is_allowed_file(file_path):
     """
-    Verifică dacă fișierul are o extensie acceptată și nu este într-un folder ignorat.
+    Verifică dacă fișierul nu este într-un folder ignorat și nu este un fișier binar cunoscut.
     """
     path = Path(file_path)
     
@@ -68,7 +68,19 @@ def is_allowed_file(file_path):
     if path.name in IGNORED_FILES:
         return False
         
-    return path.suffix.lower() in ALLOWED_EXTENSIONS
+    # Excludem formatele binare cunoscute pentru a permite orice text/cod
+    BINARY_EXTENSIONS = {
+        '.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf', '.zip', '.tar', '.gz',
+        '.mp3', '.mp4', '.avi', '.mov', '.exe', '.dll', '.so', '.bin', '.pkl',
+        '.db', '.sqlite', '.class', '.jar', '.woff', '.woff2', '.ttf', '.eot',
+        '.7z', '.rar'
+    }
+    
+    suffix = path.suffix.lower()
+    if suffix in BINARY_EXTENSIONS:
+        return False
+        
+    return True
 
 def scan_project_files(root_dir):
     """
