@@ -336,67 +336,78 @@ def parse_and_chunk_file(file_path, root_dir):
 
 # ==================== DETERMINISTIC MERMAID GENERATORS (AST BASED) ====================
 
+def _safe_id(name):
+    """Transformă orice string într-un identificator valid pentru Mermaid classDiagram."""
+    import re
+    return re.sub(r'[^a-zA-Z0-9_]', '_', name).strip('_') or 'Node'
+
+def _safe_label(text):
+    """Elimină orice caractere care ar putea sparge sintaxa Mermaid din labels."""
+    return text.replace('"', '').replace("'", '').replace('{', '').replace('}', '').replace(':', ' ').replace('<', '').replace('>', '').replace('(', '_').replace(')', '').replace(',', ' ').replace('=', '_')
+
 def generate_uml_class_diagram(files_list, root_dir):
-    """
-    Analizează AST-ul tuturor fișierelor Python din listă și generează deterministic
-    o diagramă de clase Mermaid.js complet validă și extrem de detaliată.
-    """
     classes = []
-    
+
     for file_path in files_list:
         if file_path.suffix.lower() != '.py':
             continue
-            
         try:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
             tree = ast.parse(content)
-            
+
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef):
+                    # Luăm doar părinții care sunt Name simple (nu ast.Attribute)
                     parents = [base.id for base in node.bases if isinstance(base, ast.Name)]
                     methods = []
                     fields = []
-                    
-                    # Inspectăm corpul clasei pentru metode și atribute
+
                     for item in node.body:
                         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            args = [arg.arg for arg in item.args.args if arg.arg != 'self']
-                            methods.append(f"{item.name}({', '.join(args)})")
+                            methods.append(f"{item.name}()")
                         elif isinstance(item, ast.Assign):
                             for target in item.targets:
                                 if isinstance(target, ast.Name):
                                     fields.append(target.id)
-                                    
+
                     classes.append({
                         "name": node.name,
+                        "safe_name": _safe_id(node.name),
                         "parents": parents,
-                        "methods": methods[:8],  # Limită pentru lizibilitate grafică
-                        "fields": fields[:8]
+                        "methods": methods[:6],
+                        "fields": fields[:5],
                     })
         except:
             pass
 
     if not classes:
-        return "classDiagram\n    class FărăClase {\n        +descriere: Nu s-au detectat clase Python\n    }"
+        return "classDiagram\n    class NoClasses {\n        +info String\n    }"
+
+    # Colectăm numele sigure cunoscute ca să validăm relațiile
+    known = {c["name"]: c["safe_name"] for c in classes}
 
     mermaid_lines = ["classDiagram"]
-    
-    # Adăugăm definițiile claselor
+
     for cls in classes:
-        cls_name = cls["name"]
-        mermaid_lines.append(f"    class {cls_name} {{")
+        sn = cls["safe_name"]
+        # Dacă numele e diferit de safe_name, adăugăm alias
+        if sn != cls["name"]:
+            mermaid_lines.append(f'    class {sn}["{cls["name"]}"] {{')
+        else:
+            mermaid_lines.append(f"    class {sn} {{")
         for field in cls["fields"]:
             mermaid_lines.append(f"        +{field}")
         for method in cls["methods"]:
             mermaid_lines.append(f"        +{method}")
         mermaid_lines.append("    }")
-        
-        # Adăugăm legăturile de moștenire (Parent <|-- Child)
+
+    # Relații de moștenire — doar între clase cunoscute în proiect
+    for cls in classes:
         for parent in cls["parents"]:
-            # Relație de moștenire în Mermaid.js
-            mermaid_lines.append(f"    {parent} <|-- {cls_name}")
-            
+            if parent in known:
+                mermaid_lines.append(f"    {known[parent]} <|-- {cls['safe_name']}")
+
     return "\n".join(mermaid_lines)
 
 def generate_dependency_diagram(files_list, root_dir):
@@ -455,5 +466,315 @@ def generate_dependency_diagram(files_list, root_dir):
             src_clean = src.replace("/", "_").replace(".", "_").replace("-", "_")
             dest_clean = dest.replace("/", "_").replace(".", "_").replace("-", "_")
             mermaid_lines.append(f"    {src_clean}[\"{src}\"] --> {dest_clean}[\"{dest}\"]")
-            
+
     return "\n".join(mermaid_lines)
+
+
+def _mid(name: str) -> str:
+    """Sanitizează un string pentru a fi ID valid în Mermaid."""
+    return re.sub(r'[^a-zA-Z0-9_]', '_', name).lstrip('_') or 'node'
+
+
+def generate_sequence_diagram(files_list, root_dir):
+    """
+    Strategie:
+    1. Construiește un registru global: nume_funcție -> modul
+    2. Caută apeluri cross-modul în corpul funcțiilor
+    3. Fallback: dacă nu există cross-modul, arată apeluri intra-modul între funcții top-level
+    4. Fallback final: arată participanții cu note despre metodele lor principale
+    """
+    py_files = [f for f in files_list if f.suffix.lower() == '.py']
+    if not py_files:
+        return "sequenceDiagram\n    participant Project\n    Note over Project: Nu există fișiere Python"
+
+    # Registru funcții: {func_name: module_stem}
+    func_registry = {}
+    module_funcs = {}  # {module_stem: [func_name, ...]}
+    for fp in py_files:
+        mod = fp.stem
+        module_funcs[mod] = []
+        try:
+            content = open(fp, encoding="utf-8", errors="ignore").read()
+            tree = ast.parse(content)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    func_registry[node.name] = mod
+                    module_funcs[mod].append(node.name)
+        except:
+            pass
+
+    # Caută apeluri cross-modul
+    cross_calls = []
+    visited = set()
+    for fp in py_files:
+        caller_mod = fp.stem
+        try:
+            content = open(fp, encoding="utf-8", errors="ignore").read()
+            tree = ast.parse(content)
+            for func_node in ast.walk(tree):
+                if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                caller_func = func_node.name
+                for call in ast.walk(func_node):
+                    if not isinstance(call, ast.Call):
+                        continue
+                    callee_name = None
+                    if isinstance(call.func, ast.Name):
+                        callee_name = call.func.id
+                    elif isinstance(call.func, ast.Attribute):
+                        callee_name = call.func.attr
+                    if callee_name and callee_name in func_registry:
+                        callee_mod = func_registry[callee_name]
+                        if callee_mod != caller_mod:
+                            edge = (caller_mod, callee_mod, callee_name)
+                            if edge not in visited:
+                                visited.add(edge)
+                                cross_calls.append(edge)
+        except:
+            pass
+
+    lines = ["sequenceDiagram"]
+
+    if cross_calls:
+        # Cazul ideal: există apeluri cross-modul
+        seen_parts = list(dict.fromkeys(
+            m for caller, callee, _ in cross_calls[:15] for m in [caller, callee]
+        ))[:8]
+        for p in seen_parts:
+            lines.append(f"    participant {p}")
+        for caller, callee, method in cross_calls[:15]:
+            lines.append(f"    {caller}->>{callee}: {method}()")
+        return "\n".join(lines)
+
+    # Fallback: apeluri intra-modul (funcții din același fișier care se apelează)
+    intra_calls = []
+    visited2 = set()
+    for fp in py_files:
+        mod = fp.stem
+        local_funcs = set(module_funcs.get(mod, []))
+        try:
+            content = open(fp, encoding="utf-8", errors="ignore").read()
+            tree = ast.parse(content)
+            for func_node in ast.walk(tree):
+                if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                caller_f = func_node.name
+                for call in ast.walk(func_node):
+                    if not isinstance(call, ast.Call):
+                        continue
+                    callee_name = None
+                    if isinstance(call.func, ast.Name):
+                        callee_name = call.func.id
+                    if callee_name and callee_name in local_funcs and callee_name != caller_f:
+                        edge = (f"{mod}.{caller_f}", f"{mod}.{callee_name}", callee_name)
+                        if edge not in visited2:
+                            visited2.add(edge)
+                            intra_calls.append(edge)
+        except:
+            pass
+
+    if intra_calls:
+        seen_parts = list(dict.fromkeys(
+            p for c, e, _ in intra_calls[:12] for p in [c, e]
+        ))[:8]
+        for p in seen_parts:
+            safe = p.replace('.', '_')
+            lines.append(f'    participant {safe} as "{p}"')
+        for caller, callee, method in intra_calls[:12]:
+            lines.append(f"    {caller.replace('.','_')}->>{callee.replace('.','_')}: {method}()")
+        return "\n".join(lines)
+
+    # Fallback final: arată modulele cu primele lor funcții
+    mods = list(module_funcs.items())[:6]
+    for mod, funcs in mods:
+        lines.append(f"    participant {mod}")
+    if len(mods) >= 2:
+        for i in range(min(len(mods) - 1, 5)):
+            m1, f1 = mods[i]
+            m2, _ = mods[i + 1]
+            func = f1[0] if f1 else "call"
+            lines.append(f"    {m1}->>{m2}: {func}()")
+            lines.append(f"    {m2}-->>{m1}: return")
+    else:
+        mod, funcs = mods[0] if mods else ("App", [])
+        lines.append(f"    participant {mod}")
+        lines.append(f"    Note over {mod}: {', '.join(funcs[:4])}")
+
+    return "\n".join(lines)
+
+
+def generate_flowchart_diagram(files_list, root_dir):
+    """
+    Generează un call-graph complet: funcție → funcție.
+    Include atât apeluri cross-modul cât și intra-modul.
+    Nodurile sunt grupate pe modul prin stilizare.
+    """
+    py_files = [f for f in files_list if f.suffix.lower() == '.py']
+    if not py_files:
+        return "flowchart TD\n    A[Nu există fișiere Python]"
+
+    # Registru global
+    func_registry = {}  # func_name -> (module, full_label)
+    for fp in py_files:
+        mod = fp.stem
+        try:
+            content = open(fp, encoding="utf-8", errors="ignore").read()
+            tree = ast.parse(content)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    label = f"{mod}.{node.name}"
+                    func_registry[node.name] = (mod, label)
+        except:
+            pass
+
+    if not func_registry:
+        # Fallback pentru fișiere non-Python sau fără funcții
+        lines = ["flowchart LR"]
+        for fp in files_list[:10]:
+            rel = str(fp.relative_to(root_dir))
+            nid = _mid(rel)
+            lines.append(f'    {nid}["{fp.name}"]')
+        return "\n".join(lines)
+
+    # Găsim apelurile
+    edges = []
+    visited = set()
+    for fp in py_files:
+        mod = fp.stem
+        try:
+            content = open(fp, encoding="utf-8", errors="ignore").read()
+            tree = ast.parse(content)
+            for func_node in ast.walk(tree):
+                if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                caller_label = f"{mod}.{func_node.name}"
+                caller_id = _mid(caller_label)
+                for call in ast.walk(func_node):
+                    if not isinstance(call, ast.Call):
+                        continue
+                    callee_name = None
+                    if isinstance(call.func, ast.Name):
+                        callee_name = call.func.id
+                    elif isinstance(call.func, ast.Attribute):
+                        callee_name = call.func.attr
+                    if callee_name and callee_name in func_registry:
+                        callee_mod, callee_label = func_registry[callee_name]
+                        callee_id = _mid(callee_label)
+                        if caller_id != callee_id:
+                            edge = (caller_id, caller_label, callee_id, callee_label)
+                            if edge not in visited:
+                                visited.add(edge)
+                                edges.append(edge)
+        except:
+            pass
+
+    lines = ["flowchart TD"]
+    shown_nodes = {}  # id -> label
+
+    # Adăugăm maxim 25 de edges
+    for caller_id, caller_label, callee_id, callee_label in edges[:25]:
+        shown_nodes[caller_id] = caller_label
+        shown_nodes[callee_id] = callee_label
+
+    if not shown_nodes:
+        # Nicio legătură detectată - arată toate funcțiile ca noduri izolate
+        for name, (mod, label) in list(func_registry.items())[:15]:
+            nid = _mid(label)
+            shown_nodes[nid] = label
+
+    for nid, label in shown_nodes.items():
+        lines.append(f'    {nid}["{label}"]')
+
+    for caller_id, _, callee_id, _ in edges[:25]:
+        if caller_id in shown_nodes and callee_id in shown_nodes:
+            lines.append(f"    {caller_id} --> {callee_id}")
+
+    return "\n".join(lines)
+
+
+def generate_package_diagram(files_list, root_dir):
+    """
+    Grupează fișierele pe directoare (pachete) și arată dependențele prin import.
+    Folosește subgraph Mermaid pentru o grupare vizuală clară.
+    """
+    packages = {}
+    for fp in files_list:
+        rel = fp.relative_to(root_dir)
+        pkg = rel.parts[0] if len(rel.parts) > 1 else "root"
+        packages.setdefault(pkg, []).append(fp.name)
+
+    file_basenames = {f.stem: str(f.relative_to(root_dir)) for f in files_list}
+    pkg_deps = set()
+
+    for fp in files_list:
+        if fp.suffix.lower() != '.py':
+            continue
+        rel = fp.relative_to(root_dir)
+        src_pkg = rel.parts[0] if len(rel.parts) > 1 else "root"
+        try:
+            content = open(fp, encoding="utf-8", errors="ignore").read()
+            tree = ast.parse(content)
+            for node in ast.walk(tree):
+                imported = None
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        imported = alias.name.split('.')[0]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported = node.module.split('.')[0]
+                if imported and imported in file_basenames:
+                    dest_path = Path(file_basenames[imported])
+                    dest_pkg = dest_path.parts[0] if len(dest_path.parts) > 1 else "root"
+                    if src_pkg != dest_pkg:
+                        pkg_deps.add((src_pkg, dest_pkg))
+        except:
+            pass
+
+    lines = ["graph LR"]
+
+    # Subgraph pentru fiecare pachet
+    for pkg, files in packages.items():
+        pkg_id = _mid(pkg)
+        lines.append(f'    subgraph {pkg_id} ["{pkg}"]')
+        for fname in files[:6]:
+            file_id = _mid(f"{pkg}_{fname}")
+            lines.append(f'        {file_id}["{fname}"]')
+        if len(files) > 6:
+            more_id = _mid(f"{pkg}_more")
+            lines.append(f'        {more_id}["... +{len(files)-6} fișiere"]')
+        lines.append("    end")
+
+    # Săgeți între pachete
+    for src, dest in pkg_deps:
+        s = _mid(src)
+        d = _mid(dest)
+        lines.append(f"    {s} --> {d}")
+
+    # Dacă totul e în root, arată fișierele ca noduri individuale cu links
+    if len(packages) == 1 and "root" in packages:
+        lines = ["graph LR"]
+        py_files = [f for f in files_list if f.suffix.lower() == '.py']
+        for fp in py_files[:12]:
+            nid = _mid(fp.stem)
+            lines.append(f'    {nid}["{fp.name}"]')
+        # Adaugă dependency edges între fișiere
+        visited_e = set()
+        for fp in py_files:
+            try:
+                content = open(fp, encoding="utf-8", errors="ignore").read()
+                tree = ast.parse(content)
+                for node in ast.walk(tree):
+                    imported = None
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            imported = alias.name.split('.')[0]
+                    elif isinstance(node, ast.ImportFrom) and node.module:
+                        imported = node.module.split('.')[0]
+                    if imported and imported in file_basenames:
+                        e = (_mid(fp.stem), _mid(imported))
+                        if e not in visited_e and e[0] != e[1]:
+                            visited_e.add(e)
+                            lines.append(f"    {e[0]} --> {e[1]}")
+            except:
+                pass
+
+    return "\n".join(lines)
