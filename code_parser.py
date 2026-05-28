@@ -361,37 +361,77 @@ def generate_uml_class_diagram(files_list, root_dir):
     classes = []
 
     for file_path in files_list:
-        if file_path.suffix.lower() != '.py':
-            continue
-        try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            tree = ast.parse(content)
-
-            for node in ast.walk(tree):
-                if isinstance(node, ast.ClassDef):
-                    # Luăm doar părinții care sunt Name simple (nu ast.Attribute)
-                    parents = [base.id for base in node.bases if isinstance(base, ast.Name)]
+        suffix = file_path.suffix.lower()
+        if suffix != '.py':
+            # Extracție universală pentru non-Python (Java, C++, JS, TS, Rust, C#)
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                
+                # Căutăm clase în Java, C++, C#, JS, TS, Rust
+                class_matches = re.finditer(r'(?:class|struct|interface|trait)\s+([a-zA-Z0-9_]+)(?:\s*(?:extends|:)\s*([a-zA-Z0-9_]+))?', content)
+                for match in class_matches:
+                    c_name = match.group(1)
+                    parent = match.group(2)
+                    parents = [parent] if parent else []
+                    
+                    # Extragem contextul din jurul clasei pentru a căuta metode/câmpuri brute
+                    class_start = match.start()
+                    context = content[class_start:class_start + 1500]
+                    
+                    # Căutăm metode brute: e.g. nume(argumente)
                     methods = []
+                    methods_found = re.findall(r'(?:fn|public|private|protected|void|int|string|async|function)?\s+([a-zA-Z0-9_]+)\s*\(', context)
+                    for m in methods_found:
+                        if m not in {c_name, 'if', 'for', 'while', 'switch', 'catch', 'init', 'class', 'struct', 'fn', 'void'}:
+                            methods.append(f"{m}()")
+                            
+                    # Căutăm câmpuri brute: e.g. int nume; sau let nume =
                     fields = []
-
-                    for item in node.body:
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            methods.append(f"{item.name}()")
-                        elif isinstance(item, ast.Assign):
-                            for target in item.targets:
-                                if isinstance(target, ast.Name):
-                                    fields.append(target.id)
-
+                    fields_found = re.findall(r'(?:private|public|protected|let|const|var)?\s*(?:int|string|double|float|bool|boolean)?\s+([a-zA-Z0-9_]+)\s*(?:;|=)', context)
+                    for fd in fields_found:
+                        if fd not in {c_name, 'if', 'for', 'while', 'return', 'class', 'struct', 'fn', 'void'} and len(fd) > 1:
+                            fields.append(fd)
+                            
                     classes.append({
-                        "name": node.name,
-                        "safe_name": _safe_id(node.name),
+                        "name": c_name,
+                        "safe_name": _safe_id(c_name),
                         "parents": parents,
-                        "methods": methods[:6],
-                        "fields": fields[:5],
+                        "methods": list(dict.fromkeys(methods))[:6],
+                        "fields": list(dict.fromkeys(fields))[:5],
                     })
-        except:
-            pass
+            except:
+                pass
+        else:
+            # Extracție precisă AST pentru Python
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                tree = ast.parse(content)
+
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ClassDef):
+                        parents = [base.id for base in node.bases if isinstance(base, ast.Name)]
+                        methods = []
+                        fields = []
+
+                        for item in node.body:
+                            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                methods.append(f"{item.name}()")
+                            elif isinstance(item, ast.Assign):
+                                for target in item.targets:
+                                    if isinstance(target, ast.Name):
+                                        fields.append(target.id)
+
+                        classes.append({
+                            "name": node.name,
+                            "safe_name": _safe_id(node.name),
+                            "parents": parents,
+                            "methods": methods[:6],
+                            "fields": fields[:5],
+                        })
+            except:
+                pass
 
     if not classes:
         return "classDiagram\n    class NoClasses {\n        +info String\n    }"
@@ -403,7 +443,6 @@ def generate_uml_class_diagram(files_list, root_dir):
 
     for cls in classes:
         sn = cls["safe_name"]
-        # Dacă numele e diferit de safe_name, adăugăm alias
         if sn != cls["name"]:
             mermaid_lines.append(f'    class {sn}["{cls["name"]}"] {{')
         else:
@@ -424,7 +463,7 @@ def generate_uml_class_diagram(files_list, root_dir):
 
 def generate_dependency_diagram(files_list, root_dir):
     """
-    Analizează importurile (`import` și `from X import Y`) din fișierele Python și Javascript
+    Analizează importurile (`import`, `require`, `using`, `use`, `#include`) din toate fișierele
     și desenează diagrama de dependențe / apeluri de module a proiectului.
     """
     dependencies = []
@@ -435,27 +474,41 @@ def generate_dependency_diagram(files_list, root_dir):
         suffix = file_path.suffix.lower()
         
         if suffix != '.py':
-            continue
-            
-        try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            tree = ast.parse(content)
-            
-            for node in ast.walk(tree):
-                imported_module = None
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        imported_module = alias.name.split('.')[0]
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        imported_module = node.module.split('.')[0]
-                        
-                if imported_module and imported_module in file_basenames:
-                    target_file = file_basenames[imported_module]
-                    dependencies.append((rel_path, target_file))
-        except:
-            pass
+            # Extracție importuri prin regex pentru limbaje non-Python
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                
+                # Căutăm cuvinte cheie de import (import, include, using, use, require)
+                imports = re.findall(r'(?:import|using|use|#include|require)\s+["\'<]?([a-zA-Z0-9_\-\./\:]+)["\'>]?;?', content)
+                for imp in imports:
+                    imp_base = imp.split('/')[-1].split('.')[-1].split(':')[-1].strip()
+                    if imp_base in file_basenames:
+                        target_file = file_basenames[imp_base]
+                        dependencies.append((rel_path, target_file))
+            except:
+                pass
+        else:
+            # Extracție precisă AST pentru Python
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                tree = ast.parse(content)
+                
+                for node in ast.walk(tree):
+                    imported_module = None
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            imported_module = alias.name.split('.')[0]
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module:
+                            imported_module = node.module.split('.')[0]
+                            
+                    if imported_module and imported_module in file_basenames:
+                        target_file = file_basenames[imported_module]
+                        dependencies.append((rel_path, target_file))
+            except:
+                pass
 
     if not dependencies:
         # Dacă nu sunt dependențe detectate prin AST, mapăm fișierele pur ierarhic la rădăcină
@@ -490,58 +543,83 @@ def _mid(name: str) -> str:
 def generate_sequence_diagram(files_list, root_dir):
     """
     Strategie:
-    1. Construiește un registru global: nume_funcție -> modul
+    1. Construiește un registru global: nume_funcție -> modul (pentru orice fișier text din codebase)
     2. Caută apeluri cross-modul în corpul funcțiilor
     3. Fallback: dacă nu există cross-modul, arată apeluri intra-modul între funcții top-level
     4. Fallback final: arată participanții cu note despre metodele lor principale
     """
-    py_files = [f for f in files_list if f.suffix.lower() == '.py']
-    if not py_files:
-        return "sequenceDiagram\n    participant Project\n    Note over Project: Nu există fișiere Python"
+    if not files_list:
+        return "sequenceDiagram\n    participant Project\n    Note over Project: Nu există fișiere în proiect"
 
     # Registru funcții: {func_name: module_stem}
     func_registry = {}
     module_funcs = {}  # {module_stem: [func_name, ...]}
-    for fp in py_files:
+    
+    for fp in files_list:
         mod = fp.stem
         module_funcs[mod] = []
+        suffix = fp.suffix.lower()
+        
         try:
-            content = open(fp, encoding="utf-8", errors="ignore").read()
-            tree = ast.parse(content)
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    func_registry[node.name] = mod
-                    module_funcs[mod].append(node.name)
+            with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                
+            if suffix == '.py':
+                tree = ast.parse(content)
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        func_registry[node.name] = mod
+                        module_funcs[mod].append(node.name)
+            else:
+                # Extracție prin regex pentru Java, C++, JS, TS, Go, Rust, C#
+                defs = re.findall(r'(?:fn|public|private|protected|void|int|string|async|function)\s+([a-zA-Z0-9_]+)\s*\(', content)
+                for d in defs:
+                    if d not in {'if', 'for', 'while', 'catch', 'switch', 'init', 'void'}:
+                        func_registry[d] = mod
+                        module_funcs[mod].append(d)
         except:
             pass
 
     # Caută apeluri cross-modul
     cross_calls = []
     visited = set()
-    for fp in py_files:
+    for fp in files_list:
         caller_mod = fp.stem
+        suffix = fp.suffix.lower()
+        
         try:
-            content = open(fp, encoding="utf-8", errors="ignore").read()
-            tree = ast.parse(content)
-            for func_node in ast.walk(tree):
-                if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                caller_func = func_node.name
-                for call in ast.walk(func_node):
-                    if not isinstance(call, ast.Call):
+            with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                
+            if suffix == '.py':
+                tree = ast.parse(content)
+                for func_node in ast.walk(tree):
+                    if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         continue
-                    callee_name = None
-                    if isinstance(call.func, ast.Name):
-                        callee_name = call.func.id
-                    elif isinstance(call.func, ast.Attribute):
-                        callee_name = call.func.attr
-                    if callee_name and callee_name in func_registry:
-                        callee_mod = func_registry[callee_name]
-                        if callee_mod != caller_mod:
-                            edge = (caller_mod, callee_mod, callee_name)
-                            if edge not in visited:
-                                visited.add(edge)
-                                cross_calls.append(edge)
+                    caller_func = func_node.name
+                    for call in ast.walk(func_node):
+                        if not isinstance(call, ast.Call):
+                            continue
+                        callee_name = None
+                        if isinstance(call.func, ast.Name):
+                            callee_name = call.func.id
+                        elif isinstance(call.func, ast.Attribute):
+                            callee_name = call.func.attr
+                        if callee_name and callee_name in func_registry:
+                            callee_mod = func_registry[callee_name]
+                            if callee_mod != caller_mod:
+                                edge = (caller_mod, callee_mod, callee_name)
+                                if edge not in visited:
+                                    visited.add(edge)
+                                    cross_calls.append(edge)
+            else:
+                # Căutăm apeluri de funcții înregistrate în fișierele non-Python
+                for callee_name, callee_mod in func_registry.items():
+                    if callee_mod != caller_mod and f"{callee_name}(" in content:
+                        edge = (caller_mod, callee_mod, callee_name)
+                        if edge not in visited:
+                            visited.add(edge)
+                            cross_calls.append(edge)
         except:
             pass
 
@@ -561,27 +639,41 @@ def generate_sequence_diagram(files_list, root_dir):
     # Fallback: apeluri intra-modul (funcții din același fișier care se apelează)
     intra_calls = []
     visited2 = set()
-    for fp in py_files:
+    for fp in files_list:
         mod = fp.stem
         local_funcs = set(module_funcs.get(mod, []))
+        suffix = fp.suffix.lower()
+        
         try:
-            content = open(fp, encoding="utf-8", errors="ignore").read()
-            tree = ast.parse(content)
-            for func_node in ast.walk(tree):
-                if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                caller_f = func_node.name
-                for call in ast.walk(func_node):
-                    if not isinstance(call, ast.Call):
+            with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                
+            if suffix == '.py':
+                tree = ast.parse(content)
+                for func_node in ast.walk(tree):
+                    if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         continue
-                    callee_name = None
-                    if isinstance(call.func, ast.Name):
-                        callee_name = call.func.id
-                    if callee_name and callee_name in local_funcs and callee_name != caller_f:
-                        edge = (f"{mod}.{caller_f}", f"{mod}.{callee_name}", callee_name)
-                        if edge not in visited2:
-                            visited2.add(edge)
-                            intra_calls.append(edge)
+                    caller_f = func_node.name
+                    for call in ast.walk(func_node):
+                        if not isinstance(call, ast.Call):
+                            continue
+                        callee_name = None
+                        if isinstance(call.func, ast.Name):
+                            callee_name = call.func.id
+                        if callee_name and callee_name in local_funcs and callee_name != caller_f:
+                            edge = (f"{mod}.{caller_f}", f"{mod}.{callee_name}", callee_name)
+                            if edge not in visited2:
+                                visited2.add(edge)
+                                intra_calls.append(edge)
+            else:
+                # Pentru limbaje non-Python: căutăm apeluri de funcții locale în cadrul fișierului
+                for caller_f in local_funcs:
+                    for callee_name in local_funcs:
+                        if callee_name != caller_f and f"{callee_name}(" in content:
+                            edge = (f"{mod}.{caller_f}", f"{mod}.{callee_name}", callee_name)
+                            if edge not in visited2:
+                                visited2.add(edge)
+                                intra_calls.append(edge)
         except:
             pass
 
@@ -621,28 +713,37 @@ def generate_flowchart_diagram(files_list, root_dir):
     Include atât apeluri cross-modul cât și intra-modul.
     Nodurile sunt grupate pe modul prin stilizare.
     """
-    py_files = [f for f in files_list if f.suffix.lower() == '.py']
-    if not py_files:
-        return "flowchart TD\n    A[Nu există fișiere Python]"
+    if not files_list:
+        return "flowchart TD\n    A[Nu există fișiere în proiect]"
 
-    # Registru global
-    func_registry = {}  # func_name -> (module, full_label)
-    for fp in py_files:
+    # Registru global: func_name -> (module, full_label)
+    func_registry = {}  
+    for fp in files_list:
         mod = fp.stem
+        suffix = fp.suffix.lower()
         try:
-            content = open(fp, encoding="utf-8", errors="ignore").read()
-            tree = ast.parse(content)
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    label = f"{mod}.{node.name}"
-                    func_registry[node.name] = (mod, label)
+            with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            if suffix == '.py':
+                tree = ast.parse(content)
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        label = f"{mod}.{node.name}"
+                        func_registry[node.name] = (mod, label)
+            else:
+                # Extracție prin regex pentru limbaje non-Python
+                defs = re.findall(r'(?:fn|public|private|protected|void|int|string|async|function)\s+([a-zA-Z0-9_]+)\s*\(', content)
+                for d in defs:
+                    if d not in {'if', 'for', 'while', 'catch', 'switch', 'init', 'void'}:
+                        label = f"{mod}.{d}"
+                        func_registry[d] = (mod, label)
         except:
             pass
 
     if not func_registry:
-        # Fallback pentru fișiere non-Python sau fără funcții
+        # Fallback pentru codebase fără funcții detectate - arată fișierele și conexiunile simple
         lines = ["flowchart LR"]
-        for fp in files_list[:10]:
+        for fp in files_list[:12]:
             rel = str(fp.relative_to(root_dir))
             nid = _mid(rel)
             lines.append(f'    {nid}["{fp.name}"]')
@@ -651,27 +752,58 @@ def generate_flowchart_diagram(files_list, root_dir):
     # Găsim apelurile
     edges = []
     visited = set()
-    for fp in py_files:
+    for fp in files_list:
         mod = fp.stem
+        suffix = fp.suffix.lower()
         try:
-            content = open(fp, encoding="utf-8", errors="ignore").read()
-            tree = ast.parse(content)
-            for func_node in ast.walk(tree):
-                if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                caller_label = f"{mod}.{func_node.name}"
-                caller_id = _mid(caller_label)
-                for call in ast.walk(func_node):
-                    if not isinstance(call, ast.Call):
+            with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                
+            if suffix == '.py':
+                tree = ast.parse(content)
+                for func_node in ast.walk(tree):
+                    if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         continue
-                    callee_name = None
-                    if isinstance(call.func, ast.Name):
-                        callee_name = call.func.id
-                    elif isinstance(call.func, ast.Attribute):
-                        callee_name = call.func.attr
-                    if callee_name and callee_name in func_registry:
-                        callee_mod, callee_label = func_registry[callee_name]
+                    caller_label = f"{mod}.{func_node.name}"
+                    caller_id = _mid(caller_label)
+                    for call in ast.walk(func_node):
+                        if not isinstance(call, ast.Call):
+                            continue
+                        callee_name = None
+                        if isinstance(call.func, ast.Name):
+                            callee_name = call.func.id
+                        elif isinstance(call.func, ast.Attribute):
+                            callee_name = call.func.attr
+                        if callee_name and callee_name in func_registry:
+                            callee_mod, callee_label = func_registry[callee_name]
+                            callee_id = _mid(callee_label)
+                            if caller_id != callee_id:
+                                edge = (caller_id, caller_label, callee_id, callee_label)
+                                if edge not in visited:
+                                    visited.add(edge)
+                                    edges.append(edge)
+            else:
+                # Pentru limbaje non-Python
+                defs = re.findall(r'(?:fn|public|private|protected|void|int|string|async|function)\s+([a-zA-Z0-9_]+)\s*\(', content)
+                local_funcs = [d for d in defs if d not in {'if', 'for', 'while', 'catch', 'switch', 'init', 'void'}]
+                
+                for callee_name, (callee_mod, callee_label) in func_registry.items():
+                    if f"{callee_name}(" in content:
                         callee_id = _mid(callee_label)
+                        caller_label = f"{mod}.main"
+                        matches = list(re.finditer(r'(?:fn|public|private|protected|void|int|string|async|function)\s+([a-zA-Z0-9_]+)\s*\(', content))
+                        if matches:
+                            call_pos = content.find(f"{callee_name}(")
+                            caller_name = "main"
+                            for m in reversed(matches):
+                                if m.start() < call_pos:
+                                    cand = m.group(1)
+                                    if cand not in {'if', 'for', 'while', 'catch', 'switch', 'init', 'void'} and cand != callee_name:
+                                        caller_name = cand
+                                        break
+                            caller_label = f"{mod}.{caller_name}"
+                        
+                        caller_id = _mid(caller_label)
                         if caller_id != callee_id:
                             edge = (caller_id, caller_label, callee_id, callee_label)
                             if edge not in visited:
@@ -683,13 +815,11 @@ def generate_flowchart_diagram(files_list, root_dir):
     lines = ["flowchart TD"]
     shown_nodes = {}  # id -> label
 
-    # Adăugăm maxim 25 de edges
     for caller_id, caller_label, callee_id, callee_label in edges[:25]:
         shown_nodes[caller_id] = caller_label
         shown_nodes[callee_id] = callee_label
 
     if not shown_nodes:
-        # Nicio legătură detectată - arată toate funcțiile ca noduri izolate
         for name, (mod, label) in list(func_registry.items())[:15]:
             nid = _mid(label)
             shown_nodes[nid] = label
@@ -719,20 +849,30 @@ def generate_package_diagram(files_list, root_dir):
     pkg_deps = set()
 
     for fp in files_list:
-        if fp.suffix.lower() != '.py':
-            continue
+        suffix = fp.suffix.lower()
         rel = fp.relative_to(root_dir)
         src_pkg = rel.parts[0] if len(rel.parts) > 1 else "root"
+        
         try:
-            content = open(fp, encoding="utf-8", errors="ignore").read()
-            tree = ast.parse(content)
-            for node in ast.walk(tree):
-                imported = None
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        imported = alias.name.split('.')[0]
-                elif isinstance(node, ast.ImportFrom) and node.module:
-                    imported = node.module.split('.')[0]
+            with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            
+            imported_modules = []
+            if suffix == '.py':
+                tree = ast.parse(content)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            imported_modules.append(alias.name.split('.')[0])
+                    elif isinstance(node, ast.ImportFrom) and node.module:
+                        imported_modules.append(node.module.split('.')[0])
+            else:
+                imports = re.findall(r'(?:import|using|use|#include|require)\s+["\'<]?([a-zA-Z0-9_\-\./\:]+)["\'>]?;?', content)
+                for imp in imports:
+                    imp_base = imp.split('/')[-1].split('.')[-1].split(':')[-1].strip()
+                    imported_modules.append(imp_base)
+                    
+            for imported in imported_modules:
                 if imported and imported in file_basenames:
                     dest_path = Path(file_basenames[imported])
                     dest_pkg = dest_path.parts[0] if len(dest_path.parts) > 1 else "root"
@@ -764,23 +904,33 @@ def generate_package_diagram(files_list, root_dir):
     # Dacă totul e în root, arată fișierele ca noduri individuale cu links
     if len(packages) == 1 and "root" in packages:
         lines = ["graph LR"]
-        py_files = [f for f in files_list if f.suffix.lower() == '.py']
-        for fp in py_files[:12]:
+        for fp in files_list[:12]:
             nid = _mid(fp.stem)
             lines.append(f'    {nid}["{fp.name}"]')
-        # Adaugă dependency edges între fișiere
+        
         visited_e = set()
-        for fp in py_files:
+        for fp in files_list:
+            suffix = fp.suffix.lower()
             try:
-                content = open(fp, encoding="utf-8", errors="ignore").read()
-                tree = ast.parse(content)
-                for node in ast.walk(tree):
-                    imported = None
-                    if isinstance(node, ast.Import):
-                        for alias in node.names:
-                            imported = alias.name.split('.')[0]
-                    elif isinstance(node, ast.ImportFrom) and node.module:
-                        imported = node.module.split('.')[0]
+                with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                
+                imported_modules = []
+                if suffix == '.py':
+                    tree = ast.parse(content)
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.Import):
+                            for alias in node.names:
+                                imported_modules.append(alias.name.split('.')[0])
+                        elif isinstance(node, ast.ImportFrom) and node.module:
+                            imported_modules.append(node.module.split('.')[0])
+                else:
+                    imports = re.findall(r'(?:import|using|use|#include|require)\s+["\'<]?([a-zA-Z0-9_\-\./\:]+)["\'>]?;?', content)
+                    for imp in imports:
+                        imp_base = imp.split('/')[-1].split('.')[-1].split(':')[-1].strip()
+                        imported_modules.append(imp_base)
+
+                for imported in imported_modules:
                     if imported and imported in file_basenames:
                         e = (_mid(fp.stem), _mid(imported))
                         if e not in visited_e and e[0] != e[1]:

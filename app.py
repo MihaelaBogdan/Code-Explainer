@@ -3926,7 +3926,7 @@ else:
                         import torch
                         inputs = indexer.tokenizer(code_input, return_tensors="pt", truncation=True, max_length=25)
                         tokens_raw = indexer.tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
-                        inputs = {k: v.to(vector_store.DEVICE) for k, v in inputs.items()}
+                        inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
                         with torch.no_grad():
                             outputs = indexer.model(**inputs, output_attentions=True)
 
