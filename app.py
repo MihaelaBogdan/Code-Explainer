@@ -259,6 +259,12 @@ def generate_real_duplicate_refactoring(c1, c2):
         refactored_code_2 = "\n".join(ref_lines2)
         
         return shared_func, refactored_code_1, refactored_code_2
+        
+    return (
+        "# Nu s-a putut extrage o logică comună semnificativă (minim 2 linii non-triviale comune) pentru refactorizare.",
+        code1,
+        code2
+    )
 
 def find_duplicates(embeddings, chunks, threshold=0.88):
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9
