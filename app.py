@@ -3011,7 +3011,7 @@ else:
             if "search_top_k_cached" not in st.session_state:
                 st.session_state.search_top_k_cached = 5
             if "search_min_score_cached" not in st.session_state:
-                st.session_state.search_min_score_cached = 30
+                st.session_state.search_min_score_cached = 10
             if "search_types_cached" not in st.session_state:
                 st.session_state.search_types_cached = ["Funcție", "Clasă", "Modul"]
                 
