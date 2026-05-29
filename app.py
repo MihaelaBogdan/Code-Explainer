@@ -2799,7 +2799,7 @@ if (uploaded_file is not None or git_clone_requested) and not st.session_state.p
 
 # ----------------- MAIN UI -----------------
 if not st.session_state.project_processed:
-    st.markdown("<h2 style='text-align: center; margin-top: 100px;'>Codebase Explainer (Local)</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; margin-top: 100px;'>Codebase Explainer</h2>", unsafe_allow_html=True)
 else:
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Dashboard & Explorator Cod",
