@@ -3330,7 +3330,7 @@ else:
 
     # ----------------- TAB 4: SECURITATE -----------------
     with tab4:
-        st.markdown("## Security Audit — Analiză Statică AST + Validare Semantică CodeBERT")
+        st.markdown("## Securitate + Validare semantică")
         st.write("---")
 
         findings = st.session_state.security_findings
@@ -3772,7 +3772,7 @@ else:
 
         # --- SUB-TAB: COD MORT ---
         with dead_tab:
-            st.markdown("## Detector Cod Mort (Dead Code) — AST")
+            st.markdown("## Detector Cod Mort (Dead Code)")
             st.markdown("Detectează funcții și clase **definite dar niciodată apelate** în restul proiectului.")
             st.write("---")
 
