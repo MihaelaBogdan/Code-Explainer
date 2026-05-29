@@ -2640,38 +2640,8 @@ def render_mermaid(mermaid_code, height=500):
 # ----------------- SIDEBAR -----------------
 with st.sidebar:
     st.markdown('<h1 class="neon-glow-header">Code Explainer</h1>', unsafe_allow_html=True)
-    st.markdown("Analiză structurală și căutare semantică **100% Offline** bazată pe **Transformer (CodeBERT)**.")
     st.write("---")
-    
-    # Afișăm statusul hardware acceleration
-    device_label = "Apple Silicon (MPS)" if "mps" in str(DEVICE).lower() else "GPU (CUDA)" if "cuda" in str(DEVICE).lower() else "CPU local"
-    st.markdown(f"**Dispozitiv Transformer:**\n`{device_label}`")
-    
-    st.write("---")
-    
-    # Alegere Model Transformer (Wow and customizability feature)
-    st.markdown("### Model Transformer")
-    selected_model_name = st.selectbox(
-        "Alege modelul de vectorizare:",
-        [
-            "microsoft/codebert-base",
-            "microsoft/graphcodebert-base",
-            "sentence-transformers/all-MiniLM-L6-v2"
-        ],
-        index=0,
-        help="CodeBERT este optimizat pentru cod. GraphCodeBERT folosește fluxul de date structural. MiniLM este ultra-rapid și mic."
-    )
-    
-    # Dacă modelul se schimbă, resetăm indexul deoarece dimensiunile și spațiile vectoriale diferă
-    if selected_model_name != st.session_state.selected_model:
-        st.session_state.selected_model = selected_model_name
-        st.session_state.indexer = CodeBERTIndexer(selected_model_name)
-        st.session_state.project_processed = False
-        st.session_state.search_results = None
-        st.session_state.search_tokens = None
-        st.warning("Modelul s-a schimbat! Re-vectorizați proiectul folosind noul Transformer.")
-        
-    st.write("---")
+
     
     # Încărcare proiect ZIP
     st.markdown("### Încărcare Proiect")
@@ -2781,7 +2751,7 @@ if (uploaded_file is not None or git_clone_requested) and not st.session_state.p
         st.session_state.chunks = chunks
         
         # Afișăm detaliile despre procesul de vectorizare cu CodeBERT
-        st.info(f"S-au extras {len(chunks)} blocuri logice de cod din proiect. Începem procesul de vectorizare cu modelul Transformer CodeBERT...")
+        st.info(f"S-au extras {len(chunks)} blocuri logice de cod din proiect.")
         
         # Vectorizare cu CodeBERT (PyTorch) + FAISS
         progress_bar = st.progress(0)
@@ -2829,40 +2799,16 @@ if (uploaded_file is not None or git_clone_requested) and not st.session_state.p
 
 # ----------------- MAIN UI -----------------
 if not st.session_state.project_processed:
-    st.markdown("<h2 style='text-align: center; margin-top: 100px;'>Bun venit la AI Codebase Explainer (Local)</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-size: 1.2em;'>Încarcă un fișier <b>.zip</b> al proiectului în sidebar pentru a începe analiza structurală complet locală.</p>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("""
-        <div class="glass-card" style="text-align: center; height: 180px;">
-            <h3>CodeBERT Transformer</h3>
-            <p>Rulează modelul pre-antrenat local pentru a genera reprezentări dense de 768-D pentru fiecare metodă, clasă sau funcție.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with col2:
-        st.markdown("""
-        <div class="glass-card" style="text-align: center; height: 180px;">
-            <h3>Căutare Semantică FAISS</h3>
-            <p>Interogare instantanee în cod pe bază de concepte, nu doar cuvinte cheie rigide, folosind indexarea similarității L2.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with col3:
-        st.markdown("""
-        <div class="glass-card" style="text-align: center; height: 180px;">
-            <h3>Parsare AST Deterministică</h3>
-            <p>Generează automat diagrame de clase UML reale și diagrame de conexiuni între module prin analiza arborelui sintactic.</p>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; margin-top: 100px;'>Codebase Explainer (Local)</h2>", unsafe_allow_html=True)
 else:
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Dashboard & Explorator Cod",
         "Arhitectură UML & Relații",
         "Căutare Semantică în Proiect",
         "Securitate",
-        "Quiz Cod & Semantic",
+        "Quiz Semantic",
         "Analiză & Recomandări",
-        "Analiză de Impact Semantic (AI)",
+        "Analiză de Impact Semantic",
     ])
     
     # ----------------- TAB 1: DASHBOARD & CODE VIEW -----------------
@@ -2881,35 +2827,8 @@ else:
             
         st.write("---")
         
-        # Specificații Tehnice Transformer (Wow Academic highlight)
-        with st.expander("Specificații Tehnice Detaliate: Model Transformer CodeBERT", expanded=False):
-            st.markdown("""
-            <div style="background: rgba(13, 17, 23, 0.4); padding: 20px; border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.25); margin-bottom: 20px;">
-                <h4 style="color: #38bdf8; margin-top:0; font-weight:700;">Arhitectura Rețelei CodeBERT (Microsoft Pretrained Transformer)</h4>
-                <p>Modelul utilizat în mod direct pentru înțelegerea proiectului dvs. folosește o arhitectură bazată pe <b>Transformer Encoder</b> (similară cu RoBERTa) antrenată bimodal pe limbaj natural și cod sursă.</p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0;">
-                    <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                        <b>Parametrii Generali ai Rețelei:</b>
-                        <ul style="margin-top: 5px; padding-left: 20px;">
-                            <li><b>Straturi (Transformer Layers):</b> 12 straturi dense</li>
-                            <li><b>Capete de Atenție (Attention Heads):</b> 12 per strat</li>
-                            <li><b>Dimensiune Ascunsă (Hidden Size):</b> 768 dimensiuni</li>
-                            <li><b>Dimensiune FFN:</b> 3072 dimensiuni</li>
-                        </ul>
-                    </div>
-                    <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                        <b>Tokenizare și Intrare:</b>
-                        <ul style="margin-top: 5px; padding-left: 20px;">
-                            <li><b>Vocabular Model:</b> 50,265 tokeni unici</li>
-                            <li><b>Tokenizare:</b> Byte-Pair Encoding (BPE)</li>
-                            <li><b>Fereastră Context:</b> 512 tokeni</li>
-                            <li><b>Parametri Totali:</b> ~125 Milioane</li>
-                        </ul>
-                    </div>
-                </div>
-                <p style="font-size: 0.95em; color: #94a3b8; margin-bottom:0; font-style: italic;">Aplicația noastră aplică o operație matematică de <b>Mean Pooling</b> pe tensorul de ieșire al Transformer-ului, calculând reprezentarea vectorială medie a tuturor tokenilor, ponderată prin masca de atenție.</p>
-            </div>
-            """, unsafe_allow_html=True)
+        
+
         
         col_left, col_right = st.columns([1, 2])
         
@@ -2952,8 +2871,8 @@ else:
 
     # ----------------- TAB 2: ARHITECTURĂ UML (AST DRIVEN) -----------------
     with tab2:
-        st.markdown("## Diagrame UML — Generate Determinist din AST")
-        st.markdown("Alege tipul de diagramă dorit. Toate sunt generate **100% offline** prin analiza arborelui sintactic al codului tău.")
+        st.markdown("## Diagrame UML")
+        st.markdown("Alege tipul de diagramă dorit.")
 
         UML_TYPES = {
             "Diagramă de Clase": "class",
@@ -3013,13 +2932,12 @@ else:
     with tab3:
         sub_tab_search, sub_tab_attention = st.tabs([
             "Căutare Semantică în Proiect",
-            "Explorator Atenție CodeBERT (Attention Heatmap)"
+            "Attention Heatmap"
         ])
         
         # --- SUB-TAB 3.1: CĂUTARE SEMANTICĂ ---
         with sub_tab_search:
-            st.markdown("## Căutare Semantică Locală Premium (CodeBERT + FAISS)")
-            st.markdown("Introduceți un concept de programare, o sarcină sau un nume de funcție pe care doriți să îl găsiți (ex: *'criptează parola'*, *'socket connection'*, *'multi-threading'*, *'trimite e-mail'*). Modelul **CodeBERT** va analiza contextul semantic din spate și va localiza codul potrivit.")
+            st.markdown("## Căutare Semantică Locală Premium")
             st.write("---")
             
             # Inițializare parametri cache search
@@ -3139,8 +3057,7 @@ else:
                 # 3. Harta Semantică 2D Constellation Map (Plotly Neural Space Explorer)
                 if filtered_results:
                     st.write("---")
-                    st.markdown("### 🌌 Harta Constelației Semantice (Plotly Neural Space)")
-                    st.markdown("Această diagramă plotează interogarea ta în centru `(0,0)` și ordonează fragmentele găsite pe baza **distanței semantice reale**. Cu cât un nod este mai aproape de centru, cu atât relevanța lui este mai mare!")
+                    st.markdown("### Harta Constelației Semantice")
                     
                     try:
                         import plotly.graph_objects as go
@@ -3283,7 +3200,7 @@ else:
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        with st.expander("Analiză Structurală Automată (AST Docs)"):
+                        with st.expander("Documentație"):
                             st.markdown(f"**Rezumat structural:** {chunk['summary']}")
                             st.markdown(f"**Documentație (Docstring):**")
                             st.info(chunk["docstring"])
@@ -3311,8 +3228,7 @@ else:
                 
         # --- SUB-TAB 3.2: EXPLORATOR ATENȚIE CODEBERT (WOW HIGHLIGHT) ---
         with sub_tab_attention:
-            st.markdown("## Explorator Atenție CodeBERT — Self-Attention Heatmap")
-            st.markdown("Vizualizare interactivă a mecanismului de **Self-Attention** din Transformer: fiecare celulă `(i,j)` arată cât de mult tokenul `i` acordă atenție tokenului `j` în ultimul strat al CodeBERT.")
+            st.markdown("## Attention Heatmap")
             st.write("---")
 
             with st.form("attention_form"):
@@ -3415,7 +3331,6 @@ else:
     # ----------------- TAB 4: SECURITATE -----------------
     with tab4:
         st.markdown("## Security Audit — Analiză Statică AST + Validare Semantică CodeBERT")
-        st.markdown("Auditorul scanează toate fișierele Python prin **analiza AST** pentru pattern-uri de vulnerabilitate cunoscute, apoi validează fiecare găsire cu **CodeBERT** prin similaritate cosinus față de exemple de cod nesigur.")
         st.write("---")
 
         findings = st.session_state.security_findings
@@ -3477,109 +3392,7 @@ else:
 
     # ----------------- TAB 5: QUIZ COD & SEMANTIC -----------------
     with tab5:
-        st.markdown("## Quiz Interactiv — Cod & Semantic")
-        
-        # 1. Explanation of Transformer / CodeBERT connection
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, rgba(139,92,246,0.06), rgba(56,189,248,0.06)); border: 1px solid rgba(139,92,246,0.25); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
-            <h3 style="margin-top:0; color:#38bdf8; display:flex; align-items:center; gap:8px; font-size:1.15em;">
-                🧠 Cum funcționează evaluarea Transformer (CodeBERT)?
-            </h3>
-            <p style="color:#94a3b8; font-size:0.95em; line-height:1.6; margin-bottom:0;">
-                Spre deosebire de testele clasice grilă statice, <strong>Quiz-ul Semantic</strong> folosește modelul <strong>CodeBERT</strong> (o arhitectură Transformer antrenată bimodal pe cod sursă și limbaj natural). Atunci când alegi o descriere, modelul generează un vector dens (embedding) pe baza codului tău și a variantelor text. Apoi măsoară unghiul dintre acești vectori folosind <strong>similaritatea cosinus</strong>. Varianta cu scorul maxim este considerată potrivirea semantică optimă din spațiul vectorial al rețelei neurale!
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # 2. Score Attempts Dashboard HUD
-        if st.session_state.get("quiz_history"):
-            history = st.session_state.quiz_history
-            total_attempts = len(history)
-            avg_score = int(sum(x["pct"] for x in history) / total_attempts)
-            best_score = max(x["pct"] for x in history)
-            
-            # Determine Rank Badge
-            if best_score == 100:
-                rank_badge = "🌌 Transformer Master"
-                badge_color = "#c084fc"
-                badge_glow = "rgba(192,132,252,0.4)"
-            elif best_score >= 71:
-                rank_badge = "⚔️ Code Architect"
-                badge_color = "#38bdf8"
-                badge_glow = "rgba(56,189,248,0.4)"
-            elif best_score >= 50:
-                rank_badge = "🛡️ Code Apprentice"
-                badge_color = "#fbbf24"
-                badge_glow = "rgba(251,191,36,0.4)"
-            else:
-                rank_badge = "🥚 Junior Intern"
-                badge_color = "#94a3b8"
-                badge_glow = "rgba(148,163,184,0.4)"
-                
-            st.markdown(f"""
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-                <div style="background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);">
-                    <div style="color: #64748b; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Teste Rulate</div>
-                    <div style="color: #f1f5f9; font-size: 2em; font-weight: bold; margin-top: 8px;">{total_attempts}</div>
-                </div>
-                <div style="background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);">
-                    <div style="color: #64748b; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Medie Globală</div>
-                    <div style="color: #38bdf8; font-size: 2em; font-weight: bold; margin-top: 8px;">{avg_score}%</div>
-                </div>
-                <div style="background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);">
-                    <div style="color: #64748b; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Cel Mai Bun Scor</div>
-                    <div style="color: #4ade80; font-size: 2em; font-weight: bold; margin-top: 8px;">{best_score}%</div>
-                </div>
-                <div style="background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15); border-left: 4px solid {badge_color};">
-                    <div style="color: #64748b; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Rang Curent</div>
-                    <div style="color: {badge_color}; font-size: 1.15em; font-weight: bold; margin-top: 14px; text-shadow: 0 0 8px {badge_glow};">{rank_badge}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # 3. Plotly score progression line graph
-            import plotly.graph_objects as go
-            x_vals = [f"Test {i+1}" for i in range(len(history))]
-            y_vals = [attempt["pct"] for attempt in history]
-            types = [attempt["type"] for attempt in history]
-            hover_texts = [f"Tip: {t}<br>Scor: {s}%" for t, s in zip(types, y_vals)]
-            
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=x_vals,
-                y=y_vals,
-                mode="lines+markers",
-                name="Scor",
-                line=dict(color="#8b5cf6", width=3),
-                marker=dict(size=8, color="#38bdf8", symbol="circle"),
-                text=hover_texts,
-                hoverinfo="text"
-            ))
-            
-            fig.update_layout(
-                title=dict(
-                    text="Evoluția Scorurilor În Timp",
-                    font=dict(color="#f1f5f9", size=15),
-                    x=0.5,
-                    xanchor="center"
-                ),
-                xaxis=dict(
-                    title="Încercare",
-                    gridcolor="rgba(255,255,255,0.05)",
-                    tickfont=dict(color="#94a3b8")
-                ),
-                yaxis=dict(
-                    title="Scor (%)",
-                    range=[-5, 105],
-                    gridcolor="rgba(255,255,255,0.05)",
-                    tickfont=dict(color="#94a3b8")
-                ),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                margin=dict(l=40, r=40, t=50, b=40),
-                height=240
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        st.markdown("## Quiz Semantic și Quiz din Cod")
 
         st.markdown("### Lansează un Quiz Nou")
         st.markdown("Alege tipul de quiz, setează timpul și apasă **Start Quiz** pentru a lansa sesiunea în popup.")
@@ -3810,69 +3623,14 @@ else:
 
             run_semantic_quiz()
 
-        # 4. Expandable Attempts History table & Clear utility
-        if st.session_state.get("quiz_history"):
-            st.write("---")
-            st.markdown("### 📋 Istoricul Încercărilor tale")
-            
-            # Render beautifully formatted HTML Table
-            rows_html = ""
-            for i, attempt in enumerate(reversed(st.session_state.quiz_history)):
-                pct = attempt["pct"]
-                if pct == 100:
-                    badge = '<span style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.3);padding:3px 8px;border-radius:12px;font-size:0.8em;font-weight:bold;">🔥 Perfect</span>'
-                elif pct >= 60:
-                    badge = '<span style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);padding:3px 8px;border-radius:12px;font-size:0.8em;font-weight:bold;">🌟 Promovat</span>'
-                else:
-                    badge = '<span style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:3px 8px;border-radius:12px;font-size:0.8em;font-weight:bold;">✏️ Revizuiește</span>'
-                
-                rows_html += f"""
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:12px;color:#94a3b8;font-size:0.9em;">#{len(st.session_state.quiz_history) - i}</td>
-                    <td style="padding:12px;color:#f1f5f9;font-size:0.9em;font-weight:500;">{attempt['timestamp']}</td>
-                    <td style="padding:12px;color:#c084fc;font-size:0.9em;font-weight:500;">{attempt['type']}</td>
-                    <td style="padding:12px;color:#f1f5f9;font-size:0.9em;font-family:monospace;font-weight:bold;">{attempt['score']}</td>
-                    <td style="padding:12px;color:#38bdf8;font-size:0.9em;font-weight:bold;">{pct}%</td>
-                    <td style="padding:12px;text-align:right;">{badge}</td>
-                </tr>
-                """
-            
-            table_html = f"""
-            <div style="overflow-x:auto;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(15,23,42,0.3);margin-top:16px;">
-                <table style="width:100%;border-collapse:collapse;text-align:left;">
-                    <thead>
-                        <tr style="background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.08);">
-                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">ID</th>
-                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">Dată & Oră</th>
-                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">Tip Quiz</th>
-                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">Scor</th>
-                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;">Procent</th>
-                            <th style="padding:12px;color:#64748b;font-weight:600;font-size:0.85em;text-transform:uppercase;text-align:right;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows_html}
-                    </tbody>
-                </table>
-            </div>
-            """
-            import textwrap
-            st.markdown(textwrap.dedent(table_html), unsafe_allow_html=True)
-            
-            col_btn1, col_btn2 = st.columns([6, 1])
-            with col_btn2:
-                st.write("")
-                if st.button("🗑️ Șterge Istoric", use_container_width=True, type="secondary", key="clear_history_btn"):
-                    st.session_state.quiz_history = []
-                    st.rerun()
+
 
     # ----------------- TAB 6: ANALIZĂ & RECOMANDĂRI -----------------
     with tab6:
-        dup_tab, complexity_tab, dead_tab, transformer_inspector_tab = st.tabs([
+        dup_tab, dead_tab, transformer_inspector_tab = st.tabs([
             "Detector Cod Duplicat",
-            "Complexitate Ciclomatică",
             "Cod Mort (Dead Code)",
-            "Inspector Conceptuale CodeBERT (AI)",
+            "Inspector Conceptual CodeBERT",
         ])
 
         # --- SUB-TAB 5.1: DETECTOR COD DUPLICAT ---
@@ -4008,142 +3766,14 @@ else:
                     else:
                         st.warning("Te rog completează ambele zone de cod cu text.")
 
-        # --- SUB-TAB: COMPLEXITATE CICLOMATICĂ ---
-        with complexity_tab:
-            st.markdown("## Complexitate Ciclomatică — Analiză AST")
-            st.markdown("Complexitatea ciclomatică măsoară câte căi independente de execuție există într-o funcție. Formula: **CC = număr ramificații (if/elif/for/while/except/and/or) + 1**. O valoare > 10 indică cod greu de testat și menținut.")
-            st.write("---")
 
-            if st.button("Calculează Complexitatea", use_container_width=True, key="btn_complexity"):
-                with st.spinner("Se analizează structura AST a fiecărei funcții și metode..."):
-                    try:
-                        results_cc = []
-                        for chunk in st.session_state.chunks:
-                            # Analizăm doar codul Python (.py)
-                            if not chunk.get("file_path", "").endswith(".py"):
-                                continue
-                            
-                            code = chunk.get("content", "")
-                            try:
-                                tree = ast.parse(code)
-                            except:
-                                continue
-                            
-                            # Parcurgem arborele sintactic pentru a găsi toate definițiile de funcții/metode
-                            for node in ast.walk(tree):
-                                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                                    func_name = node.name
-                                    
-                                    # Calculăm CC pentru această funcție/metodă
-                                    cc = 1
-                                    for sub_node in ast.walk(node):
-                                        # Evităm numărarea structurilor de control din interiorul funcțiilor/metodelor imbricate (inner functions)
-                                        if sub_node is not node and isinstance(sub_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                                            continue
-                                            
-                                        if isinstance(sub_node, (ast.If, ast.For, ast.While, ast.ExceptHandler,
-                                                             ast.With, ast.AsyncFor, ast.AsyncWith)):
-                                            cc += 1
-                                        elif isinstance(sub_node, ast.BoolOp):
-                                            cc += len(sub_node.values) - 1
-                                        elif isinstance(sub_node, (ast.comprehension,)):
-                                            cc += 1
-                                            
-                                    start_line = node.lineno
-                                    end_line = getattr(node, "end_lineno", start_line + 5)
-                                    n_lines = end_line - start_line + 1
-                                    
-                                    # Determinăm dacă este o metodă în interiorul unei clase
-                                    parent_class = ""
-                                    if chunk.get("type") == "class":
-                                        parent_class = chunk.get("name", "")
-                                        
-                                    display_name = f"{parent_class}.{func_name}" if parent_class else func_name
-                                    
-                                    # Adăugăm în listă
-                                    results_cc.append({
-                                        "name": display_name,
-                                        "file": chunk.get("file_path", "?"),
-                                        "start": chunk.get("start_line", 0) + start_line - 1,
-                                        "cc": cc,
-                                        "lines": n_lines,
-                                    })
-                        
-                        # Deduplicare după (cale_fișier, nume, linie_start)
-                        seen_cc = set()
-                        unique_cc = []
-                        for r in results_cc:
-                            key = (r["file"], r["name"], r["start"])
-                            if key not in seen_cc:
-                                seen_cc.add(key)
-                                unique_cc.append(r)
-                                
-                        st.session_state["cc_results"] = sorted(unique_cc, key=lambda x: x["cc"], reverse=True)
-                    except Exception as e:
-                        st.error(str(e))
 
-            if "cc_results" in st.session_state:
-                if st.session_state["cc_results"]:
-                    data = st.session_state["cc_results"]
-                    high   = [r for r in data if r["cc"] > 10]
-                    medium = [r for r in data if 5 < r["cc"] <= 10]
-                    low    = [r for r in data if r["cc"] <= 5]
 
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Funcții analizate", len(data))
-                    c2.metric("🔴 Complexitate mare (>10)", len(high))
-                    c3.metric("🟡 Medie (6–10)", len(medium))
-                    c4.metric("🟢 Mică (≤5)", len(low))
-                    st.write("---")
-
-                    # Grafic bar cu plotly
-                    try:
-                        import plotly.graph_objects as go
-                        names  = [f"{r['name']} ({r['file']})" for r in data[:20]]
-                        values = [r["cc"] for r in data[:20]]
-                        colors = ["#ef4444" if v > 10 else "#f59e0b" if v > 5 else "#22c55e" for v in values]
-                        fig = go.Figure(go.Bar(
-                            x=values, y=names, orientation="h",
-                            marker_color=colors,
-                            text=values, textposition="outside",
-                        ))
-                        fig.update_layout(
-                            title="Top 20 funcții după complexitate ciclomatică",
-                            xaxis_title="Complexitate Ciclomatică (CC)",
-                            yaxis=dict(autorange="reversed"),
-                            height=max(350, len(data[:20]) * 28),
-                            margin=dict(l=220, r=60, t=50, b=40),
-                            paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
-                            font=dict(color="#e2e8f0"),
-                            xaxis=dict(gridcolor="#1e293b"),
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                    except ImportError:
-                        pass
-
-                    st.write("---")
-                    if high:
-                        st.markdown(f"### 🔴 Funcții cu complexitate mare (>10) — {len(high)} funcții")
-                        for r in high:
-                            with st.expander(f"**{r['name']}** — CC={r['cc']} · `{r['file']}` linia {r['start']} · {r['lines']} linii"):
-                                st.markdown(f"""
-| Metrică | Valoare |
-|---------|---------|
-| Complexitate Ciclomatică | **{r['cc']}** |
-| Linii de cod | {r['lines']} |
-| Fișier | `{r['file']}` |
-| Linia de start | {r['start']} |
-""")
-                                st.warning(f"CC={r['cc']} > 10: funcția are prea multe ramificații. Recomandare: **împarte în sub-funcții** sau extrage logica în funcții helper specializate.")
-                else:
-                    st.warning("Nu s-au găsit funcții sau metode Python în acest proiect pentru a calcula complexitatea ciclomatică.")
-            else:
-                st.info("Apasă **Calculează Complexitatea** pentru a analiza toate funcțiile din proiect.")
 
         # --- SUB-TAB: COD MORT ---
         with dead_tab:
             st.markdown("## Detector Cod Mort (Dead Code) — AST")
-            st.markdown("Detectează funcții și clase **definite dar niciodată apelate** în restul proiectului. Codul mort crește dimensiunea proiectului, confuzionează cititorii și poate ascunde bug-uri vechi.")
+            st.markdown("Detectează funcții și clase **definite dar niciodată apelate** în restul proiectului.")
             st.write("---")
 
             if st.button("Detectează Codul Mort", use_container_width=True, key="btn_dead"):
@@ -4214,7 +3844,7 @@ else:
 
         # --- SUB-TAB 5.2: INSPECTOR CONCEPTUALE CODEBERT (AI) ---
         with transformer_inspector_tab:
-            st.markdown("## 🌌 Inspector Conceptuale CodeBERT — Proiecție în Spațiul Vectorial (AI)")
+            st.markdown("## Inspector Conceptual CodeBERT")
             st.markdown("Explorează modul în care rețeaua bimodală Transformer percepe, vectorizează și asociază logic funcțiile tale din codebase cu concepte abstracte de programare în 768 de dimensiuni.")
             st.write("---")
 
@@ -4376,8 +4006,7 @@ else:
 
     # ----------------- TAB 7: ANALIZĂ DE IMPACT SEMANTIC (AI) -----------------
     with tab7:
-        st.markdown("## 🛡️ Analizor de Impact Semantic (AI) — Schimbări în Cod")
-        st.markdown("Selectează o funcție sau o clasă pe care intenționezi să o modifici. Sistemul utilizează **analiza AST statică** (pentru apeluri fizice directe) combinată cu **similaritatea semantică CodeBERT** (pentru propagarea conceptuală) pentru a determina riscul de regresie în restul proiectului.")
+        st.markdown("## Analizor de Impact Semantic — Schimbări în Cod")
         st.write("---")
 
         if not st.session_state.project_processed:

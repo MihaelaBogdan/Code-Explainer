@@ -266,7 +266,7 @@ class CodeBERTIndexer:
             
             if progress_bar_callback:
                 progress = min(1.0, (i + batch_size) / len(texts))
-                progress_bar_callback(progress, f"Vectorizare blocuri cod... {i + len(batch_texts)} / {len(texts)}")
+                progress_bar_callback(progress, f"Incarcare blocuri de cod... {i + len(batch_texts)} / {len(texts)}")
                 
         all_embeddings = np.vstack(embeddings).astype('float32')
         
