@@ -2937,7 +2937,7 @@ else:
         
         # --- SUB-TAB 3.1: CĂUTARE SEMANTICĂ ---
         with sub_tab_search:
-            st.markdown("## Căutare Semantică Locală Premium")
+            st.markdown("## Căutare Semantică Locală")
             st.write("---")
             
             # Inițializare parametri cache search
