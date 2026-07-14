@@ -47,7 +47,6 @@ class SecurityVisitor(ast.NodeVisitor):
                 self.semantic_vectors[vuln_type] = mean_vec
 
 
-
     def add_finding(self, vuln_type, severity, node, description):
 
         line = getattr(node, "lineno", 0)
@@ -95,15 +94,9 @@ class SecurityVisitor(ast.NodeVisitor):
         except:
             return None, 0.0
 
-    # =========================
-    # FUNCTION CALL ANALYSIS
-    # =========================
 
     def visit_Call(self, node):
 
-        # --------------------------------
-        # eval / exec
-        # --------------------------------
 
         if isinstance(node.func, ast.Name):
 
@@ -116,16 +109,11 @@ class SecurityVisitor(ast.NodeVisitor):
                     f"Use of dangerous function '{node.func.id}'."
                 )
 
-        # --------------------------------
-        # Attribute-based calls
-        # ex: os.system()
-        # --------------------------------
 
         elif isinstance(node.func, ast.Attribute):
 
             func_name = node.func.attr
 
-            # os.system()
 
             if func_name == "system":
 
@@ -136,7 +124,6 @@ class SecurityVisitor(ast.NodeVisitor):
                     "os.system detected."
                 )
 
-            # subprocess(... shell=True)
 
             if func_name in ["run", "Popen", "call"]:
 
@@ -156,7 +143,6 @@ class SecurityVisitor(ast.NodeVisitor):
                                 "subprocess executed with shell=True."
                             )
 
-            # SQL execute()
 
             if func_name == "execute":
 
@@ -182,7 +168,6 @@ class SecurityVisitor(ast.NodeVisitor):
                             "SQL query built using f-string."
                         )
 
-            # pickle.loads()
 
             if func_name in ["load", "loads"]:
 
@@ -197,7 +182,6 @@ class SecurityVisitor(ast.NodeVisitor):
                             "pickle deserialization detected."
                         )
 
-            # hashlib.md5()
 
             if func_name in ["md5", "sha1"]:
 
@@ -210,9 +194,6 @@ class SecurityVisitor(ast.NodeVisitor):
 
         self.generic_visit(node)
 
-    # =========================
-    # HARD CODED SECRETS
-    # =========================
 
     def visit_Assign(self, node):
 

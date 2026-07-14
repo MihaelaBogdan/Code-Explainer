@@ -6,28 +6,27 @@ import re
 from pathlib import Path
 
 def unzip_project(zip_file_bytes, extract_to_dir):
-    """
-    Dezarhivează un fișier ZIP primit ca bytes într-un director specificat.
-    Șterge directorul dacă există deja pentru a evita suprapunerea proiectelor.
-    """
+\
+\
+\
+
     extract_path = Path(extract_to_dir)
     if extract_path.exists():
         shutil.rmtree(extract_path)
     extract_path.mkdir(parents=True, exist_ok=True)
-    
-    # Scriem bytes într-un fișier temporar zip și îl dezarhivăm
+
+
     temp_zip = extract_path / "temp_project.zip"
     with open(temp_zip, "wb") as f:
         f.write(zip_file_bytes)
-        
+
     with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
         zip_ref.extractall(extract_path)
-        
-    # Ștergem arhiva temporară
+
+
     os.remove(temp_zip)
-    
-    # Dacă dezarhivarea a creat un singur subdirector care conține totul,
-    # îl aducem la rădăcină pentru o mai bună organizare.
+
+
     subdirs = [d for d in extract_path.iterdir() if d.is_dir()]
     files = [f for f in extract_path.iterdir() if f.is_file()]
     if len(subdirs) == 1 and len(files) == 0:
@@ -36,56 +35,56 @@ def unzip_project(zip_file_bytes, extract_to_dir):
             shutil.move(str(item), str(extract_path))
         single_subdir.rmdir()
 
-# Seturi de directoare și fișiere de ignorat pentru a evita "zgomotul" în embeddings
+
 IGNORED_DIRS = {
-    '.git', '__pycache__', 'node_modules', 'venv', '.venv', 'env', 
-    'dist', 'build', '.idea', '.vscode', '.gemini', 'eggs', 
+    '.git', '__pycache__', 'node_modules', 'venv', '.venv', 'env',
+    'dist', 'build', '.idea', '.vscode', '.gemini', 'eggs',
     '.mypy_cache', '.pytest_cache', '.sass-cache', 'target', 'out'
 }
 
 IGNORED_FILES = {
-    '.DS_Store', 'Thumbs.db', '.gitignore', 'package-lock.json', 
+    '.DS_Store', 'Thumbs.db', '.gitignore', 'package-lock.json',
     'yarn.lock', 'pnpm-lock.yaml', 'poetry.lock', 'pip-log.txt'
 }
 
 ALLOWED_EXTENSIONS = {
-    '.py', '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.json', 
-    'yaml', '.yml', '.md', '.java', '.cpp', '.h', '.c', '.cs', 
+    '.py', '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.json',
+    'yaml', '.yml', '.md', '.java', '.cpp', '.h', '.c', '.cs',
     '.go', '.rs', '.kt', '.php', '.rb', '.sh', '.sql', '.xml'
 }
 
 def is_allowed_file(file_path):
-    """
-    Verifică dacă fișierul nu este într-un folder ignorat și nu este un fișier binar cunoscut.
-    """
+\
+\
+
     path = Path(file_path)
-    
-    # Verificăm dacă vreunul dintre părinți este în lista de directoare ignorate
+
+
     for part in path.parts:
         if part in IGNORED_DIRS:
             return False
-            
+
     if path.name in IGNORED_FILES:
         return False
-        
-    # Excludem formatele binare cunoscute pentru a permite orice text/cod
+
+
     BINARY_EXTENSIONS = {
         '.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf', '.zip', '.tar', '.gz',
         '.mp3', '.mp4', '.avi', '.mov', '.exe', '.dll', '.so', '.bin', '.pkl',
         '.db', '.sqlite', '.class', '.jar', '.woff', '.woff2', '.ttf', '.eot',
         '.7z', '.rar'
     }
-    
+
     suffix = path.suffix.lower()
     if suffix in BINARY_EXTENSIONS:
         return False
-        
+
     return True
 
 def scan_project_files(root_dir):
-    """
-    Scanează recursiv directorul proiectului și returnează o listă de căi de fișiere valide.
-    """
+\
+\
+
     valid_files = []
     for root, dirs, files in os.walk(root_dir):
         dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
@@ -96,14 +95,14 @@ def scan_project_files(root_dir):
     return valid_files
 
 def build_file_tree(root_dir, current_dir=None):
-    """
-    Construiește o structură arborescentă recursivă (dicționar) a fișierelor valide.
-    """
+\
+\
+
     if current_dir is None:
         current_dir = Path(root_dir)
-    
+
     tree = {"name": current_dir.name or "Root", "type": "directory", "children": []}
-    
+
     try:
         items = sorted(list(current_dir.iterdir()), key=lambda x: (not x.is_dir(), x.name.lower()))
         for item in items:
@@ -124,33 +123,33 @@ def build_file_tree(root_dir, current_dir=None):
                     })
     except Exception as e:
         pass
-        
+
     return tree
 
 def chunk_python_file(file_path, code_content, rel_path):
-    """
-    Folosește AST pentru a descompune fișierul Python în clase și funcții independente.
-    Păstrează metadate bogate despre semnături, docstrings și linii.
-    """
+\
+\
+\
+
     chunks = []
     lines = code_content.splitlines()
-    
+
     try:
         tree = ast.parse(code_content)
     except SyntaxError:
         return chunk_text_fallback(code_content, rel_path)
-        
+
     module_level_nodes = []
-    
+
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Extragem funcția globală
+
             start = node.lineno
             end = getattr(node, 'end_lineno', len(lines))
             func_code = "\n".join(lines[start-1:end])
             docstring = ast.get_docstring(node) or "Fără descriere disponibilă în docstring."
             args = [arg.arg for arg in node.args.args]
-            
+
             chunks.append({
                 "file_path": rel_path,
                 "type": "function",
@@ -163,20 +162,20 @@ def chunk_python_file(file_path, code_content, rel_path):
                 "content": f"# File: {rel_path} | Function: {node.name} (Lines {start}-{end})\n{func_code}"
             })
         elif isinstance(node, ast.ClassDef):
-            # Extragem clasa întreagă
+
             start = node.lineno
             end = getattr(node, 'end_lineno', len(lines))
             class_code = "\n".join(lines[start-1:end])
             docstring = ast.get_docstring(node) or "Fără descriere disponibilă în docstring."
             parents = [base.id for base in node.bases if isinstance(base, ast.Name)]
-            
-            # Extragem metodele clasei
+
+
             methods = []
             for sub_node in node.body:
                 if isinstance(sub_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     sub_args = [arg.arg for arg in sub_node.args.args]
                     methods.append(f"{sub_node.name}({', '.join(sub_args)})")
-            
+
             chunks.append({
                 "file_path": rel_path,
                 "type": "class",
@@ -191,8 +190,8 @@ def chunk_python_file(file_path, code_content, rel_path):
             })
         else:
             module_level_nodes.append(node)
-            
-    # Grupăm codul rămas de la nivelul modulului
+
+
     if module_level_nodes:
         chunk_size = 80
         for i in range(0, len(lines), chunk_size):
@@ -210,13 +209,13 @@ def chunk_python_file(file_path, code_content, rel_path):
                     "summary": f"Bloc general de cod la nivel de modul în `{rel_path}` (liniile {i+1}-{end_idx}).",
                     "content": f"# File: {rel_path} | Global Code (Lines {i+1}-{end_idx})\n{sub_code}"
                 })
-                
+
     return chunks
 
 def chunk_generic_code(code_content, rel_path, suffix):
-    """
-    Chunker inteligent pentru limbaje non-Python (C++, Java, JS, TS).
-    """
+\
+\
+
     lines = code_content.splitlines()
     if len(lines) <= 40:
         return [{
@@ -229,19 +228,19 @@ def chunk_generic_code(code_content, rel_path, suffix):
             "summary": f"Fișierul complet `{rel_path}` ({len(lines)} linii).",
             "content": f"# File: {rel_path} | Full file\n{code_content}"
         }]
-        
+
     chunks = []
     patterns = [
-        r'(class\s+\w+)', 
-        r'(function\s+\w+)', 
-        r'(\w+\s+\w+\(.*?\)\s*\{)', 
-        r'(const\s+\w+\s*=\s*\(.*?\)\s*=>)' 
+        r'(class\s+\w+)',
+        r'(function\s+\w+)',
+        r'(\w+\s+\w+\(.*?\)\s*\{)',
+        r'(const\s+\w+\s*=\s*\(.*?\)\s*=>)'
     ]
     combined_pattern = re.compile("|".join(patterns))
-    
+
     current_chunk = []
     chunk_start = 1
-    
+
     for idx, line in enumerate(lines):
         line_num = idx + 1
         if combined_pattern.search(line) and len(current_chunk) >= 20:
@@ -258,9 +257,9 @@ def chunk_generic_code(code_content, rel_path, suffix):
             })
             current_chunk = []
             chunk_start = line_num
-            
+
         current_chunk.append(line)
-        
+
         if len(current_chunk) >= 80:
             chunk_code = "\n".join(current_chunk)
             chunks.append({
@@ -275,7 +274,7 @@ def chunk_generic_code(code_content, rel_path, suffix):
             })
             current_chunk = []
             chunk_start = line_num + 1
-            
+
     if current_chunk:
         chunk_code = "\n".join(current_chunk)
         chunks.append({
@@ -288,18 +287,18 @@ def chunk_generic_code(code_content, rel_path, suffix):
             "summary": f"Partea finală a fișierului `{rel_path}` (liniile {chunk_start}-{len(lines)}).",
             "content": f"// File: {rel_path} | Block (Lines {chunk_start}-{len(lines)})\n{chunk_code}"
         })
-        
+
     return chunks
 
 def chunk_text_fallback(content, rel_path):
-    """
-    Fallback pentru fișiere text simple, Markdown, YAML sau cod care a eșuat la parsare.
-    """
+\
+\
+
     lines = content.splitlines()
     chunks = []
     chunk_size = 60
     overlap = 10
-    
+
     i = 0
     while i < len(lines):
         end_idx = min(i + chunk_size, len(lines))
@@ -319,26 +318,26 @@ def chunk_text_fallback(content, rel_path):
         if end_idx == len(lines):
             break
         i += (chunk_size - overlap)
-        
+
     return chunks
 
 def parse_and_chunk_file(file_path, root_dir):
-    """
-    Primește un fișier fizic, decide tipul lui și returnează o listă de chunk-uri indexabile.
-    """
+\
+\
+
     path = Path(file_path)
     rel_path = str(path.relative_to(root_dir))
     suffix = path.suffix.lower()
-    
+
     try:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
     except Exception as e:
         return []
-        
+
     if not content.strip():
         return []
-        
+
     if suffix == '.py':
         return chunk_python_file(file_path, content, rel_path)
     elif suffix in {'.js', '.jsx', '.ts', '.tsx', '.cpp', '.h', '.c', '.cs', '.java', '.go', '.rs', '.kt'}:
@@ -346,15 +345,14 @@ def parse_and_chunk_file(file_path, root_dir):
     else:
         return chunk_text_fallback(content, rel_path)
 
-# ==================== DETERMINISTIC MERMAID GENERATORS (AST BASED) ====================
 
 def _safe_id(name):
-    """Transformă orice string într-un identificator valid pentru Mermaid classDiagram."""
+
     import re
     return re.sub(r'[^a-zA-Z0-9_]', '_', name).strip('_') or 'Node'
 
 def _safe_label(text):
-    """Elimină orice caractere care ar putea sparge sintaxa Mermaid din labels."""
+
     return text.replace('"', '').replace("'", '').replace('{', '').replace('}', '').replace(':', ' ').replace('<', '').replace('>', '').replace('(', '_').replace(')', '').replace(',', ' ').replace('=', '_')
 
 def generate_uml_class_diagram(files_list, root_dir):
@@ -363,36 +361,36 @@ def generate_uml_class_diagram(files_list, root_dir):
     for file_path in files_list:
         suffix = file_path.suffix.lower()
         if suffix != '.py':
-            # Extracție universală pentru non-Python (Java, C++, JS, TS, Rust, C#)
+
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
-                
-                # Căutăm clase în Java, C++, C#, JS, TS, Rust
+
+
                 class_matches = re.finditer(r'(?:class|struct|interface|trait)\s+([a-zA-Z0-9_]+)(?:\s*(?:extends|:)\s*([a-zA-Z0-9_]+))?', content)
                 for match in class_matches:
                     c_name = match.group(1)
                     parent = match.group(2)
                     parents = [parent] if parent else []
-                    
-                    # Extragem contextul din jurul clasei pentru a căuta metode/câmpuri brute
+
+
                     class_start = match.start()
                     context = content[class_start:class_start + 1500]
-                    
-                    # Căutăm metode brute: e.g. nume(argumente)
+
+
                     methods = []
                     methods_found = re.findall(r'(?:fn|public|private|protected|void|int|string|async|function)?\s+([a-zA-Z0-9_]+)\s*\(', context)
                     for m in methods_found:
                         if m not in {c_name, 'if', 'for', 'while', 'switch', 'catch', 'init', 'class', 'struct', 'fn', 'void'}:
                             methods.append(f"{m}()")
-                            
-                    # Căutăm câmpuri brute: e.g. int nume; sau let nume =
+
+
                     fields = []
                     fields_found = re.findall(r'(?:private|public|protected|let|const|var)?\s*(?:int|string|double|float|bool|boolean)?\s+([a-zA-Z0-9_]+)\s*(?:;|=)', context)
                     for fd in fields_found:
                         if fd not in {c_name, 'if', 'for', 'while', 'return', 'class', 'struct', 'fn', 'void'} and len(fd) > 1:
                             fields.append(fd)
-                            
+
                     classes.append({
                         "name": c_name,
                         "safe_name": _safe_id(c_name),
@@ -403,7 +401,7 @@ def generate_uml_class_diagram(files_list, root_dir):
             except:
                 pass
         else:
-            # Extracție precisă AST pentru Python
+
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
@@ -436,7 +434,7 @@ def generate_uml_class_diagram(files_list, root_dir):
     if not classes:
         return "classDiagram\n    class NoClasses {\n        +info String\n    }"
 
-    # Colectăm numele sigure cunoscute ca să validăm relațiile
+
     known = {c["name"]: c["safe_name"] for c in classes}
 
     mermaid_lines = ["classDiagram"]
@@ -453,7 +451,7 @@ def generate_uml_class_diagram(files_list, root_dir):
             mermaid_lines.append(f"        +{method}")
         mermaid_lines.append("    }")
 
-    # Relații de moștenire — doar între clase cunoscute în proiect
+
     for cls in classes:
         for parent in cls["parents"]:
             if parent in known:
@@ -462,24 +460,24 @@ def generate_uml_class_diagram(files_list, root_dir):
     return "\n".join(mermaid_lines)
 
 def generate_dependency_diagram(files_list, root_dir):
-    """
-    Analizează importurile (`import`, `require`, `using`, `use`, `#include`) din toate fișierele
-    și desenează diagrama de dependențe / apeluri de module a proiectului.
-    """
+\
+\
+\
+
     dependencies = []
     file_basenames = {f.stem: str(f.relative_to(root_dir)) for f in files_list}
-    
+
     for file_path in files_list:
         rel_path = str(file_path.relative_to(root_dir))
         suffix = file_path.suffix.lower()
-        
+
         if suffix != '.py':
-            # Extracție importuri prin regex pentru limbaje non-Python
+
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
-                
-                # Căutăm cuvinte cheie de import (import, include, using, use, require)
+
+
                 imports = re.findall(r'(?:import|using|use|#include|require)\s+["\'<]?([a-zA-Z0-9_\-\./\:]+)["\'>]?;?', content)
                 for imp in imports:
                     imp_base = imp.split('/')[-1].split('.')[-1].split(':')[-1].strip()
@@ -489,12 +487,12 @@ def generate_dependency_diagram(files_list, root_dir):
             except:
                 pass
         else:
-            # Extracție precisă AST pentru Python
+
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
                 tree = ast.parse(content)
-                
+
                 for node in ast.walk(tree):
                     imported_module = None
                     if isinstance(node, ast.Import):
@@ -503,7 +501,7 @@ def generate_dependency_diagram(files_list, root_dir):
                     elif isinstance(node, ast.ImportFrom):
                         if node.module:
                             imported_module = node.module.split('.')[0]
-                            
+
                     if imported_module and imported_module in file_basenames:
                         target_file = file_basenames[imported_module]
                         dependencies.append((rel_path, target_file))
@@ -511,17 +509,17 @@ def generate_dependency_diagram(files_list, root_dir):
                 pass
 
     if not dependencies:
-        # Dacă nu sunt dependențe detectate prin AST, mapăm fișierele pur ierarhic la rădăcină
+
         mermaid_lines = ["graph TD"]
         for f in list(file_basenames.values())[:10]:
             name_clean = f.replace("/", "_").replace(".", "_").replace("-", "_")
             mermaid_lines.append(f"    Root --> {name_clean}[\"{f}\"]")
         return "\n".join(mermaid_lines)
 
-    # Convertim dependințele în grafic Mermaid
+
     mermaid_lines = ["graph TD"]
     visited_edges = set()
-    
+
     for src, dest in dependencies:
         if src == dest:
             continue
@@ -536,34 +534,34 @@ def generate_dependency_diagram(files_list, root_dir):
 
 
 def _mid(name: str) -> str:
-    """Sanitizează un string pentru a fi ID valid în Mermaid."""
+
     return re.sub(r'[^a-zA-Z0-9_]', '_', name).lstrip('_') or 'node'
 
 
 def generate_sequence_diagram(files_list, root_dir):
-    """
-    Strategie:
-    1. Construiește un registru global: nume_funcție -> modul (pentru orice fișier text din codebase)
-    2. Caută apeluri cross-modul în corpul funcțiilor
-    3. Fallback: dacă nu există cross-modul, arată apeluri intra-modul între funcții top-level
-    4. Fallback final: arată participanții cu note despre metodele lor principale
-    """
+\
+\
+\
+\
+\
+\
+
     if not files_list:
         return "sequenceDiagram\n    participant Project\n    Note over Project: Nu există fișiere în proiect"
 
-    # Registru funcții: {func_name: module_stem}
+
     func_registry = {}
-    module_funcs = {}  # {module_stem: [func_name, ...]}
-    
+    module_funcs = {}
+
     for fp in files_list:
         mod = fp.stem
         module_funcs[mod] = []
         suffix = fp.suffix.lower()
-        
+
         try:
             with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-                
+
             if suffix == '.py':
                 tree = ast.parse(content)
                 for node in ast.walk(tree):
@@ -571,7 +569,7 @@ def generate_sequence_diagram(files_list, root_dir):
                         func_registry[node.name] = mod
                         module_funcs[mod].append(node.name)
             else:
-                # Extracție prin regex pentru Java, C++, JS, TS, Go, Rust, C#
+
                 defs = re.findall(r'(?:fn|public|private|protected|void|int|string|async|function)\s+([a-zA-Z0-9_]+)\s*\(', content)
                 for d in defs:
                     if d not in {'if', 'for', 'while', 'catch', 'switch', 'init', 'void'}:
@@ -580,17 +578,17 @@ def generate_sequence_diagram(files_list, root_dir):
         except:
             pass
 
-    # Caută apeluri cross-modul
+
     cross_calls = []
     visited = set()
     for fp in files_list:
         caller_mod = fp.stem
         suffix = fp.suffix.lower()
-        
+
         try:
             with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-                
+
             if suffix == '.py':
                 tree = ast.parse(content)
                 for func_node in ast.walk(tree):
@@ -613,7 +611,7 @@ def generate_sequence_diagram(files_list, root_dir):
                                     visited.add(edge)
                                     cross_calls.append(edge)
             else:
-                # Căutăm apeluri de funcții înregistrate în fișierele non-Python
+
                 for callee_name, callee_mod in func_registry.items():
                     if callee_mod != caller_mod and f"{callee_name}(" in content:
                         edge = (caller_mod, callee_mod, callee_name)
@@ -626,7 +624,7 @@ def generate_sequence_diagram(files_list, root_dir):
     lines = ["sequenceDiagram"]
 
     if cross_calls:
-        # Cazul ideal: există apeluri cross-modul
+
         seen_parts = list(dict.fromkeys(
             m for caller, callee, _ in cross_calls[:15] for m in [caller, callee]
         ))[:8]
@@ -636,18 +634,18 @@ def generate_sequence_diagram(files_list, root_dir):
             lines.append(f"    {caller}->>{callee}: {method}()")
         return "\n".join(lines)
 
-    # Fallback: apeluri intra-modul (funcții din același fișier care se apelează)
+
     intra_calls = []
     visited2 = set()
     for fp in files_list:
         mod = fp.stem
         local_funcs = set(module_funcs.get(mod, []))
         suffix = fp.suffix.lower()
-        
+
         try:
             with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-                
+
             if suffix == '.py':
                 tree = ast.parse(content)
                 for func_node in ast.walk(tree):
@@ -666,7 +664,7 @@ def generate_sequence_diagram(files_list, root_dir):
                                 visited2.add(edge)
                                 intra_calls.append(edge)
             else:
-                # Pentru limbaje non-Python: căutăm apeluri de funcții locale în cadrul fișierului
+
                 for caller_f in local_funcs:
                     for callee_name in local_funcs:
                         if callee_name != caller_f and f"{callee_name}(" in content:
@@ -688,7 +686,7 @@ def generate_sequence_diagram(files_list, root_dir):
             lines.append(f"    {caller.replace('.','_')}->>{callee.replace('.','_')}: {method}()")
         return "\n".join(lines)
 
-    # Fallback final: arată modulele cu primele lor funcții
+
     mods = list(module_funcs.items())[:6]
     for mod, funcs in mods:
         lines.append(f"    participant {mod}")
@@ -708,16 +706,16 @@ def generate_sequence_diagram(files_list, root_dir):
 
 
 def generate_flowchart_diagram(files_list, root_dir):
-    """
-    Generează un call-graph complet: funcție → funcție.
-    Include atât apeluri cross-modul cât și intra-modul.
-    Nodurile sunt grupate pe modul prin stilizare.
-    """
+\
+\
+\
+\
+
     if not files_list:
         return "flowchart TD\n    A[Nu există fișiere în proiect]"
 
-    # Registru global: func_name -> (module, full_label)
-    func_registry = {}  
+
+    func_registry = {}
     for fp in files_list:
         mod = fp.stem
         suffix = fp.suffix.lower()
@@ -731,7 +729,7 @@ def generate_flowchart_diagram(files_list, root_dir):
                         label = f"{mod}.{node.name}"
                         func_registry[node.name] = (mod, label)
             else:
-                # Extracție prin regex pentru limbaje non-Python
+
                 defs = re.findall(r'(?:fn|public|private|protected|void|int|string|async|function)\s+([a-zA-Z0-9_]+)\s*\(', content)
                 for d in defs:
                     if d not in {'if', 'for', 'while', 'catch', 'switch', 'init', 'void'}:
@@ -741,7 +739,7 @@ def generate_flowchart_diagram(files_list, root_dir):
             pass
 
     if not func_registry:
-        # Fallback pentru codebase fără funcții detectate - arată fișierele și conexiunile simple
+
         lines = ["flowchart LR"]
         for fp in files_list[:12]:
             rel = str(fp.relative_to(root_dir))
@@ -749,7 +747,7 @@ def generate_flowchart_diagram(files_list, root_dir):
             lines.append(f'    {nid}["{fp.name}"]')
         return "\n".join(lines)
 
-    # Găsim apelurile
+
     edges = []
     visited = set()
     for fp in files_list:
@@ -758,7 +756,7 @@ def generate_flowchart_diagram(files_list, root_dir):
         try:
             with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-                
+
             if suffix == '.py':
                 tree = ast.parse(content)
                 for func_node in ast.walk(tree):
@@ -783,10 +781,10 @@ def generate_flowchart_diagram(files_list, root_dir):
                                     visited.add(edge)
                                     edges.append(edge)
             else:
-                # Pentru limbaje non-Python
+
                 defs = re.findall(r'(?:fn|public|private|protected|void|int|string|async|function)\s+([a-zA-Z0-9_]+)\s*\(', content)
                 local_funcs = [d for d in defs if d not in {'if', 'for', 'while', 'catch', 'switch', 'init', 'void'}]
-                
+
                 for callee_name, (callee_mod, callee_label) in func_registry.items():
                     if f"{callee_name}(" in content:
                         callee_id = _mid(callee_label)
@@ -802,7 +800,7 @@ def generate_flowchart_diagram(files_list, root_dir):
                                         caller_name = cand
                                         break
                             caller_label = f"{mod}.{caller_name}"
-                        
+
                         caller_id = _mid(caller_label)
                         if caller_id != callee_id:
                             edge = (caller_id, caller_label, callee_id, callee_label)
@@ -813,7 +811,7 @@ def generate_flowchart_diagram(files_list, root_dir):
             pass
 
     lines = ["flowchart TD"]
-    shown_nodes = {}  # id -> label
+    shown_nodes = {}
 
     for caller_id, caller_label, callee_id, callee_label in edges[:25]:
         shown_nodes[caller_id] = caller_label
@@ -835,10 +833,10 @@ def generate_flowchart_diagram(files_list, root_dir):
 
 
 def generate_package_diagram(files_list, root_dir):
-    """
-    Grupează fișierele pe directoare (pachete) și arată dependențele prin import.
-    Folosește subgraph Mermaid pentru o grupare vizuală clară.
-    """
+\
+\
+\
+
     packages = {}
     for fp in files_list:
         rel = fp.relative_to(root_dir)
@@ -852,11 +850,11 @@ def generate_package_diagram(files_list, root_dir):
         suffix = fp.suffix.lower()
         rel = fp.relative_to(root_dir)
         src_pkg = rel.parts[0] if len(rel.parts) > 1 else "root"
-        
+
         try:
             with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-            
+
             imported_modules = []
             if suffix == '.py':
                 tree = ast.parse(content)
@@ -871,7 +869,7 @@ def generate_package_diagram(files_list, root_dir):
                 for imp in imports:
                     imp_base = imp.split('/')[-1].split('.')[-1].split(':')[-1].strip()
                     imported_modules.append(imp_base)
-                    
+
             for imported in imported_modules:
                 if imported and imported in file_basenames:
                     dest_path = Path(file_basenames[imported])
@@ -883,7 +881,7 @@ def generate_package_diagram(files_list, root_dir):
 
     lines = ["graph LR"]
 
-    # Subgraph pentru fiecare pachet
+
     for pkg, files in packages.items():
         pkg_id = _mid(pkg)
         lines.append(f'    subgraph {pkg_id} ["{pkg}"]')
@@ -895,26 +893,26 @@ def generate_package_diagram(files_list, root_dir):
             lines.append(f'        {more_id}["... +{len(files)-6} fișiere"]')
         lines.append("    end")
 
-    # Săgeți între pachete
+
     for src, dest in pkg_deps:
         s = _mid(src)
         d = _mid(dest)
         lines.append(f"    {s} --> {d}")
 
-    # Dacă totul e în root, arată fișierele ca noduri individuale cu links
+
     if len(packages) == 1 and "root" in packages:
         lines = ["graph LR"]
         for fp in files_list[:12]:
             nid = _mid(fp.stem)
             lines.append(f'    {nid}["{fp.name}"]')
-        
+
         visited_e = set()
         for fp in files_list:
             suffix = fp.suffix.lower()
             try:
                 with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
-                
+
                 imported_modules = []
                 if suffix == '.py':
                     tree = ast.parse(content)
